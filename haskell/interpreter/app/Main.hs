@@ -1,6 +1,7 @@
 module Main (main) where
 
-import Lib
+import Repl
 
 main :: IO ()
-main = someFunc
+main = do
+    Repl.runner
