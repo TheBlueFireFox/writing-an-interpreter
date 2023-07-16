@@ -1,2 +1,2 @@
 # writing-an-interpreter
-Bases in the Writing an Interpreter in Go book
+Based on the Writing an Interpreter in Go book
