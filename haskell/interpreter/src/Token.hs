@@ -4,7 +4,7 @@ newtype Token = Token TokenType
     deriving (Show, Eq)
 
 data TokenType
-    = Illegal
+    = Illegal String
     | Eof
     | -- Idenfitieres
       Ident String
@@ -12,6 +12,14 @@ data TokenType
     | -- Operators
       Assign
     | Plus
+    | Minus
+    | Bang
+    | Asterisk
+    | Slash
+    | Lt
+    | Gt
+    | Eq
+    | NotEq
     | -- Delimeters
       Comma
     | Semicolon
@@ -22,4 +30,9 @@ data TokenType
     | -- Keywords
       Function
     | Let
+    | KTrue
+    | KFalse
+    | If
+    | Else
+    | Return
     deriving (Show, Eq)
