@@ -2,9 +2,18 @@ module LexerSpec (spec) where
 
 import Lexer (new, tokenize)
 import Test.Hspec (Spec, SpecWith, describe, it, shouldBe)
-import Token (Token (..), TokenType (..))
+import Token (TokenType (..))
 
-run :: String -> [Token]
+spec :: Spec
+spec = do
+    describe "TestNextToken" $ do
+        testNextTokenSimple
+        testMissingTokens
+        testNextTokenMoreSymbols
+        testNextTokenAllKeywords
+        testNextTokenComplete
+
+run :: String -> [TokenType]
 run = fst . tokenize . new
 
 testNextTokenSimple :: SpecWith ()
@@ -23,7 +32,7 @@ testNextTokenSimple =
                 , Semicolon
                 , Eof
                 ]
-        run input `shouldBe` map Token expected
+        run input `shouldBe` expected
 
 testMissingTokens :: SpecWith ()
 testMissingTokens =
@@ -77,7 +86,7 @@ testMissingTokens =
                 , Semicolon
                 , Eof
                 ]
-        run input `shouldBe` map Token expected
+        run input `shouldBe` expected
 
 testNextTokenMoreSymbols :: SpecWith ()
 testNextTokenMoreSymbols =
@@ -146,7 +155,7 @@ testNextTokenMoreSymbols =
                 , Semicolon
                 , Eof
                 ]
-        run input `shouldBe` map Token expected
+        run input `shouldBe` expected
 
 testNextTokenAllKeywords :: SpecWith ()
 testNextTokenAllKeywords =
@@ -237,7 +246,7 @@ testNextTokenAllKeywords =
                 , RBrace
                 , Eof
                 ]
-        run input `shouldBe` map Token expected
+        run input `shouldBe` expected
 
 testNextTokenComplete :: SpecWith ()
 testNextTokenComplete =
@@ -338,13 +347,4 @@ testNextTokenComplete =
                 , Semicolon
                 , Eof
                 ]
-        run input `shouldBe` map Token expected
-
-spec :: Spec
-spec = do
-    describe "TestNextToken" $ do
-        testNextTokenSimple
-        testMissingTokens
-        testNextTokenMoreSymbols
-        testNextTokenAllKeywords
-        testNextTokenComplete
+        run input `shouldBe` expected

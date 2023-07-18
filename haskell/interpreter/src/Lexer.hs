@@ -1,24 +1,26 @@
-module Lexer (Lexer, new, tokenize) where
+module Lexer (Lexer, new, tokenize, run) where
 
 import Control.Applicative (Alternative ((<|>)))
-import Control.Arrow (Arrow (second))
-import Data.Bifunctor (Bifunctor (bimap))
+import Control.Arrow (Arrow (first, second))
 import Data.Char (isDigit, isLower, isSpace, isUpper)
 import Data.Maybe (fromJust)
 import Data.Tuple (swap)
-import Token (Token (..), TokenType (..))
+import Token (TokenType (..))
 
 newtype Lexer = Lexer String
-    deriving (Show)
+    deriving (Show, Eq)
+
+run :: String -> [TokenType]
+run = fst . tokenize . new
 
 new :: String -> Lexer
 new = Lexer
 
-tokenize :: Lexer -> ([Token], Lexer)
+tokenize :: Lexer -> ([TokenType], Lexer)
 tokenize =
     let
-        inner (Token (Illegal v) : _) _ = error $ "Illegal character -- " ++ v
-        inner acc@(Token Eof : _) l = (reverse acc, l)
+        inner (Illegal v : _) _ = error $ "Illegal character -- " ++ v
+        inner acc@(Eof : _) l = (reverse acc, l)
         inner acc l = (uncurry inner . swap . second (: acc) . nextToken) l
      in
         inner []
@@ -26,7 +28,7 @@ tokenize =
 advanceLexer :: Lexer -> Int -> Lexer
 advanceLexer (Lexer input) v = Lexer $ drop v input
 
-nextToken :: Lexer -> (Lexer, Token)
+nextToken :: Lexer -> (Lexer, TokenType)
 nextToken l@(Lexer input) =
     let
         endOfFile v = case v of
@@ -37,9 +39,9 @@ nextToken l@(Lexer input) =
 
         parser v len = second (+ len) <$> parseClean v
 
-        run = swap . fromJust . uncurry parser . skipWhitespace
+        runHelper = swap . fromJust . uncurry parser . skipWhitespace
      in
-        bimap (advanceLexer l) Token $ run input
+        first (advanceLexer l) $ runHelper input
 
 isLetter :: Char -> Bool
 isLetter c = or [fun c | fun <- [isUpper, isLower, (== '_')]]

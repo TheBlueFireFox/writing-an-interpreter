@@ -1,7 +1,4 @@
-module Token (Token (..), TokenType (..)) where
-
-newtype Token = Token TokenType
-    deriving (Show, Eq)
+module Token (TokenType (..)) where
 
 data TokenType
     = Illegal String
