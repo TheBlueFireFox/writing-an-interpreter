@@ -1,6 +1,6 @@
 module Parser (parse) where
 
-import Ast (Expression (Invalid), Program (Program), Statement (LetStatement))
+import Ast (Expression (Invalid), Program (Program), Statement (LetStatement, ReturnStatement))
 import Lexer (run)
 import Token (TokenType (..))
 
@@ -33,6 +33,7 @@ parseStatement =
     let
         inner [] = Right ["Empty Statement"]
         inner (Token.Let : xs) = parseLetStatements xs
+        inner (Token.Return : xs) = parseReturnStatements xs
         inner _ = undefined
      in
         inner
@@ -54,3 +55,14 @@ parseLetStatements (x : xs) =
             (Left _, Right er) -> Right [er]
             (Right er, Left _) -> Right [er]
             (Right a, Right b) -> Right [a, b]
+
+parseReturnStatements :: [Token.TokenType] -> Either (Statement, [Token.TokenType]) Errors
+parseReturnStatements [] = Right ["Missing Token"]
+parseReturnStatements xs =
+    let
+        expr [] = Right ["Empty expression"]
+        expr cs = Left (Invalid, (tail . dropWhile (/= Semicolon)) cs)
+     in
+        case expr xs of
+            Left (e, s) -> Left (ReturnStatement e, s)
+            Right err -> Right err

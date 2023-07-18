@@ -5,6 +5,11 @@ import Test.Hspec (Spec, SpecWith, describe, it, shouldBe)
 import Ast
 import Parser (parse)
 
+spec :: Spec
+spec = do
+    testLetStatements
+    testReturnStatements
+
 testLetStatements :: SpecWith ()
 testLetStatements =
     describe "TestLetStatements" $ do
@@ -24,6 +29,21 @@ testLetStatements =
                         ]
             parse input `shouldBe` expected
 
-spec :: Spec
-spec = do
-    testLetStatements
+testReturnStatements :: SpecWith ()
+testReturnStatements =
+    describe "TestReturnStatements" $ do
+        it "TestReturnStatements" $ do
+            let
+                input =
+                    "\
+                    \return 5;\
+                    \return 10;\
+                    \return 993322;\
+                    \"
+                expected =
+                    (Left . Program)
+                        [ ReturnStatement Invalid
+                        , ReturnStatement Invalid
+                        , ReturnStatement Invalid
+                        ]
+            parse input `shouldBe` expected
