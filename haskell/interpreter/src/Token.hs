@@ -1,11 +1,13 @@
 module Token (TokenType (..)) where
 
+import Data.Int (Int64)
+
 data TokenType
     = Illegal String
     | Eof
     | -- Idenfitieres
       Ident String
-    | Int Int
+    | Int Int64
     | -- Operators
       Assign
     | Plus

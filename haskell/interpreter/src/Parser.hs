@@ -1,68 +1,138 @@
-module Parser (parse) where
+module Parser (module Parser) where
 
-import Ast (Expression (Invalid), Program (Program), Statement (LetStatement, ReturnStatement))
+import Ast (Expression (..), Program (Program), Statement (..))
+import Control.Arrow (first)
+import Data.Bifunctor (Bifunctor (bimap))
+import Data.Int (Int64)
 import Lexer (run)
 import Token (TokenType (..))
 
 type Errors = [String]
 
-data Parser = Parser
-    { tokens :: [Token.TokenType]
-    , errors :: Errors
-    }
-    deriving (Show, Eq)
+type ParseStatement = [Token.TokenType] -> Either Errors (Statement, [Token.TokenType])
+type ParseExpression = [Token.TokenType] -> Either Errors (Expression, [Token.TokenType])
 
-parse :: String -> Either Program Errors
-parse =
+data Predecence
+    = Lowest
+    | Equals
+    | LessGreater
+    | Sum
+    | Product
+    | Prefix
+    | Call
+    deriving (Enum, Eq, Ord)
+
+mapPredecence :: TokenType -> Predecence
+mapPredecence xs =
+    case xs of
+        Eq -> Equals
+        NotEq -> Equals
+        Lt -> LessGreater
+        Gt -> LessGreater
+        Plus -> Sum
+        Minus -> Sum
+        Slash -> Product
+        Asterisk -> Product
+        _ -> Lowest
+
+parse :: String -> Either Errors Program
+parse str =
     let
         helper acc token = case token of
-            [] -> undefined
-            [Token.Eof] -> Left . Program $ reverse acc
-            toks ->
-                let
-                    res = parseStatement toks
-                 in
-                    case res of
-                        Left (statement, restToks) -> helper (statement : acc) restToks
-                        Right errs -> Right errs
+            [] -> Left ["undefined state missing tokens"]
+            [Token.Eof] -> Right . Program . reverse $ acc
+            toks -> uncurry helper . first (: acc) =<< parseStatement toks
      in
-        helper [] . Lexer.run
+        helper [] . Lexer.run $ str
 
-parseStatement :: [Token.TokenType] -> Either (Statement, [Token.TokenType]) Errors
+parseStatement :: ParseStatement
 parseStatement =
     let
-        inner [] = Right ["Empty Statement"]
+        inner [] = Left ["Empty Statement"]
         inner (Token.Let : xs) = parseLetStatements xs
         inner (Token.Return : xs) = parseReturnStatements xs
-        inner _ = undefined
+        inner xs = parseExpressionStatement xs
      in
         inner
 
-parseLetStatements :: [Token.TokenType] -> Either (Statement, [Token.TokenType]) Errors
-parseLetStatements [] = Right ["Missing Tokens"]
+parseLetStatements :: ParseStatement
+parseLetStatements [] = Left ["Missing Tokens"]
 parseLetStatements (x : xs) =
     let
-        ident (Token.Ident iden) = Left iden
-        ident _ = Left "Invalid Token Position"
+        ident (Token.Ident iden) = Right iden
+        ident _ = Left ["Invalid Token Position"]
         -- invliad expression
-        -- TODO: skipping until a semicolon
-        expr [] = Right "Empty expression"
-        expr (Token.Assign : cs) = Left (Invalid, (tail . dropWhile (/= Semicolon)) cs)
-        expr (c : _) = Right ("Invalid stuff -- " ++ show c)
+        -- TODO: We are skipping the expression until we encounter a semicolon
+        expr [] = Left ["Empty expression"]
+        expr (Token.Assign : cs) = Right (Invalid, (tail . dropWhile (/= Semicolon)) cs)
+        expr (c : _) = Left ["Invalid stuff -- " ++ show c]
      in
-        case (ident x, expr xs) of
-            (Left n, Left (e, s)) -> Left (LetStatement n e, s)
-            (Left _, Right er) -> Right [er]
-            (Right er, Left _) -> Right [er]
-            (Right a, Right b) -> Right [a, b]
+        first . LetStatement <$> ident x <*> expr xs
 
-parseReturnStatements :: [Token.TokenType] -> Either (Statement, [Token.TokenType]) Errors
-parseReturnStatements [] = Right ["Missing Token"]
+parseReturnStatements :: ParseStatement
+parseReturnStatements [] = Left ["Missing Token"]
 parseReturnStatements xs =
     let
-        expr [] = Right ["Empty expression"]
-        expr cs = Left (Invalid, (tail . dropWhile (/= Semicolon)) cs)
+        expr [] = Left ["Empty expression"]
+        -- invliad expression
+        -- TODO: We are skipping the expression until we encounter a semicolon
+        expr cs = Right (Invalid, (tail . dropWhile (/= Semicolon)) cs)
      in
-        case expr xs of
-            Left (e, s) -> Left (ReturnStatement e, s)
-            Right err -> Right err
+        first ReturnStatement <$> expr xs
+
+parseExpressionStatement :: ParseStatement
+parseExpressionStatement [] = Left ["Empty expression"]
+parseExpressionStatement xs =
+    let
+        removeSemi (Token.Semicolon : r) = r
+        removeSemi r = r
+     in
+        bimap ExpressionStatement removeSemi <$> parseExpression Lowest xs
+
+parsePrefixExpression :: [TokenType] -> Either Errors (Expression, [TokenType])
+parsePrefixExpression x = case x of
+    (Ident val : cs) -> parseIdent val cs
+    (Int val : cs) -> parseInt64 val cs
+    (Bang : cs) -> parseNot cs
+    (Minus : cs) -> parseNegative cs
+    (c : _) -> Left ["Is not a prefix type " ++ show c]
+    [] -> Left ["Emptry token list"]
+
+parseInfixExpression :: Predecence -> Expression -> [TokenType] -> Either Errors (Expression, [TokenType])
+parseInfixExpression _ left [] = Right (left, [])
+parseInfixExpression pre left toks@(tok : xs)
+    | tok == Semicolon = Right (left, toks)
+    | pre >= mapPredecence tok = Right (left, toks)
+    | otherwise =
+        let
+            runner p = uncurry (parseInfixExpression pre) =<< parseInfix (p left) tok xs
+         in
+            case tok of
+                Plus -> runner AddExpr
+                Minus -> runner MinExpr
+                Slash -> runner DivExpr
+                Asterisk -> runner MulExpr
+                Eq -> runner EqExpr
+                NotEq -> runner NeqExpr
+                Lt -> runner LeExpr
+                Gt -> runner GtExpr
+                _ -> Right (left, toks)
+
+parseExpression :: Predecence -> ParseExpression
+parseExpression pre xs = uncurry (parseInfixExpression pre) =<< parsePrefixExpression xs
+
+parseIdent :: String -> [TokenType] -> Either Errors (Expression, [TokenType])
+parseIdent val xs = Right (IdentExpr val, xs)
+
+parseInt64 :: Int64 -> [TokenType] -> Either Errors (Expression, [TokenType])
+parseInt64 val xs = Right (IntegerExpr val, xs)
+
+parseNot :: [TokenType] -> Either Errors (Expression, [TokenType])
+parseNot xs = first NotExpr <$> parseExpression Prefix xs
+
+parseNegative :: [TokenType] -> Either Errors (Expression, [TokenType])
+parseNegative xs = first NegExpr <$> parseExpression Prefix xs
+
+parseInfix :: (Expression -> c) -> TokenType -> [TokenType] -> Either [String] (c, [TokenType])
+parseInfix _ _ [] = Left ["Missing tokens"]
+parseInfix expr tok xs = first expr <$> parseExpression (mapPredecence tok) xs

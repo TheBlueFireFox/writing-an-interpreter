@@ -56,6 +56,7 @@ test-suite interpreter-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      AstSpec
       LexerSpec
       ParserSpec
       Paths_interpreter
