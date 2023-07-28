@@ -13,6 +13,7 @@ data Statement
     = LetStatement String Expression
     | ReturnStatement Expression
     | ExpressionStatement Expression
+    | BlockStatement [Statement]
     | InvalidStatement
     deriving (Eq)
 
@@ -20,6 +21,7 @@ instance Show Statement where
     show (LetStatement name expr) = "let " ++ name ++ " = " ++ show expr ++ ";"
     show (ReturnStatement expr) = "return " ++ show expr ++ ";"
     show (ExpressionStatement expr) = show expr
+    show (BlockStatement exprs) = intercalate "" $ map show exprs
     show InvalidStatement = "InvalidStatement -.-;"
 
 data Expression
@@ -36,6 +38,7 @@ data Expression
     | EqExpr Expression Expression
     | GtExpr Expression Expression
     | LeExpr Expression Expression
+    | IfExpr Expression Statement (Maybe Statement) -- Condition BlockStatement BlockStatement
     | Invalid
     deriving (Eq)
 
@@ -44,6 +47,15 @@ showHelperSingle sym expr = "(" ++ sym ++ show expr ++ ")"
 
 showHelperTwo :: (Show a1, Show a2) => String -> a1 -> a2 -> String
 showHelperTwo sym l r = "(" ++ show l ++ " " ++ sym ++ " " ++ show r ++ ")"
+
+showHelperIf :: (Show a, Show p1, Show p2) => p1 -> p2 -> Maybe a -> [Char]
+showHelperIf cond cons alt =
+    let
+        hasAlt (Just altBlock) = "else " ++ show altBlock
+        hasAlt Nothing = ""
+        base = "if " ++ show cond ++ " " ++ show cons
+     in
+        base ++ hasAlt alt
 
 instance Show Expression where
     show (IdentExpr lit) = lit
@@ -60,4 +72,5 @@ instance Show Expression where
     show (EqExpr l r) = showHelperTwo "==" l r
     show (GtExpr l r) = showHelperTwo ">" l r
     show (LeExpr l r) = showHelperTwo "<" l r
+    show (IfExpr cond cons alt) = showHelperIf cond cons alt
     show Invalid = "InvalidExpression"

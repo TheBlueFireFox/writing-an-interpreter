@@ -15,44 +15,43 @@ spec = do
     testPrefixExpression
     testInfixExpression
     testOperandPrecedence
+    testIfExpression
 
 testLetStatements :: SpecWith ()
 testLetStatements =
-    describe "TestLetStatements" $ do
-        it "TestLetStatements" $ do
-            let
-                input =
-                    "\
-                    \ let x = 5; \
-                    \ let y = 10; \
-                    \ let foobar = 838383; \
-                    \"
-                expected =
-                    Right . Ast.Program $
-                        [ Ast.LetStatement "x" Ast.Invalid
-                        , Ast.LetStatement "y" Ast.Invalid
-                        , Ast.LetStatement "foobar" Ast.Invalid
-                        ]
-            parse input `shouldBe` expected
+    describe "TestLetStatements" $ it "TestLetStatements" $ do
+        let
+            input =
+                "\
+                \ let x = 5; \
+                \ let y = 10; \
+                \ let foobar = 838383; \
+                \"
+            expected =
+                Right . Ast.Program $
+                    [ Ast.LetStatement "x" Ast.Invalid
+                    , Ast.LetStatement "y" Ast.Invalid
+                    , Ast.LetStatement "foobar" Ast.Invalid
+                    ]
+        parse input `shouldBe` expected
 
 testReturnStatements :: SpecWith ()
 testReturnStatements =
-    describe "TestReturnStatements" $ do
-        it "TestReturnStatements" $ do
-            let
-                input =
-                    "\
-                    \return 5;\
-                    \return 10;\
-                    \return 993322;\
-                    \"
-                expected =
-                    (Right . Ast.Program)
-                        [ Ast.ReturnStatement Ast.Invalid
-                        , Ast.ReturnStatement Ast.Invalid
-                        , Ast.ReturnStatement Ast.Invalid
-                        ]
-            parse input `shouldBe` expected
+    describe "TestReturnStatements" $ it "TestReturnStatements" $ do
+        let
+            input =
+                "\
+                \return 5;\
+                \return 10;\
+                \return 993322;\
+                \"
+            expected =
+                (Right . Ast.Program)
+                    [ Ast.ReturnStatement Ast.Invalid
+                    , Ast.ReturnStatement Ast.Invalid
+                    , Ast.ReturnStatement Ast.Invalid
+                    ]
+        parse input `shouldBe` expected
 
 testIdentifierExpression :: SpecWith ()
 testIdentifierExpression =
@@ -217,31 +216,59 @@ testInfixExpression =
 
 testOperandPrecedence :: SpecWith ()
 testOperandPrecedence =
-    describe "TestOperandPrecedence" $ do
-        it "test operand precedence" $ do
-            let
-                tests =
-                    [ ("-a * b", "((-a) * b)")
-                    , ("!-a", "(!(-a))")
-                    , ("a + b + c", "((a + b) + c)")
-                    , ("a + b - c", "((a + b) - c)")
-                    , ("a * b * c", "((a * b) * c)")
-                    , ("a * b / c", "((a * b) / c)")
-                    , ("a + b / c", "(a + (b / c))")
-                    , ("a + b * c + d / e - f", "(((a + (b * c)) + (d / e)) - f)")
-                    , ("3 + 4; -5 * 5", "(3 + 4)((-5) * 5)")
-                    , ("5 > 4 == 3 < 4", "((5 > 4) == (3 < 4))")
-                    , ("5 < 4 != 3 > 4", "((5 < 4) != (3 > 4))")
-                    , ("3 + 4 * 5 == 3 * 1 + 4 * 5", "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))")
-                    , ("true", "true")
-                    , ("false", "false")
-                    , ("3 > 5 == false", "((3 > 5) == false)")
-                    , ("3 < 5 == true", "((3 < 5) == true)")
-                    , ("1 + (2 + 3) + 4", "((1 + (2 + 3)) + 4)")
-                    , ("(5 + 5) * 2", "((5 + 5) * 2)")
-                    , ("2 / (5 + 5)", "(2 / (5 + 5))")
-                    , ("-(5 + 5)", "(-(5 + 5))")
-                    , ("!(true == true)", "(!(true == true))")
-                    ]
+    describe "TestOperandPrecedence" $ it "test operand precedence" $ do
+        let
+            tests =
+                [ ("-a * b", "((-a) * b)")
+                , ("!-a", "(!(-a))")
+                , ("a + b + c", "((a + b) + c)")
+                , ("a + b - c", "((a + b) - c)")
+                , ("a * b * c", "((a * b) * c)")
+                , ("a * b / c", "((a * b) / c)")
+                , ("a + b / c", "(a + (b / c))")
+                , ("a + b * c + d / e - f", "(((a + (b * c)) + (d / e)) - f)")
+                , ("3 + 4; -5 * 5", "(3 + 4)((-5) * 5)")
+                , ("5 > 4 == 3 < 4", "((5 > 4) == (3 < 4))")
+                , ("5 < 4 != 3 > 4", "((5 < 4) != (3 > 4))")
+                , ("3 + 4 * 5 == 3 * 1 + 4 * 5", "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))")
+                , ("true", "true")
+                , ("false", "false")
+                , ("3 > 5 == false", "((3 > 5) == false)")
+                , ("3 < 5 == true", "((3 < 5) == true)")
+                , ("1 + (2 + 3) + 4", "((1 + (2 + 3)) + 4)")
+                , ("(5 + 5) * 2", "((5 + 5) * 2)")
+                , ("2 / (5 + 5)", "(2 / (5 + 5))")
+                , ("-(5 + 5)", "(-(5 + 5))")
+                , ("!(true == true)", "(!(true == true))")
+                ]
 
-            [show . parse . fst $ i | i <- tests] `shouldBe` ["Right " ++ snd i | i <- tests]
+        [show . parse . fst $ i | i <- tests] `shouldBe` ["Right " ++ snd i | i <- tests]
+
+testIfExpression :: SpecWith ()
+testIfExpression =
+    let
+        blk x = Ast.BlockStatement [Ast.ExpressionStatement $ Ast.IdentExpr x]
+        ident = Ast.IdentExpr
+        es = Ast.ExpressionStatement
+     in
+        describe "TestIfExpession" $ do
+            it "test no else block" $ do
+                let
+                    input = "if (x < y) { x }"
+
+                    expected =
+                        Right . Ast.Program $
+                            [ es $ Ast.IfExpr (Ast.LeExpr (ident "x") (ident "y")) (blk "x") Nothing
+                            ]
+
+                parse input `shouldBe` expected
+
+            it "test with else block" $ do
+                let
+                    input = "if (x < y) { x } else { y }"
+                    expected =
+                        Right . Ast.Program $
+                            [ es $ Ast.IfExpr (Ast.LeExpr (ident "x") (ident "y")) (blk "x") (Just (blk "y"))
+                            ]
+
+                parse input `shouldBe` expected

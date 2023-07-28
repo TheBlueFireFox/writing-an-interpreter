@@ -89,6 +89,16 @@ parseExpressionStatement xs =
      in
         bimap ExpressionStatement removeSemi <$> parseExpression Lowest xs
 
+parseBlockStatement :: [TokenType] -> Either Errors (Statement, [TokenType])
+parseBlockStatement xs =
+    let
+        inner acc (RBrace : cs) = Right (BlockStatement $ reverse acc, cs)
+        inner _ (Eof : _) = Left ["Unexpected EOF"]
+        inner _ [] = Left ["Emptry toks"]
+        inner acc toks = uncurry inner . first (: acc) =<< parseStatement toks
+     in
+        inner [] xs
+
 parsePrefixExpression :: [TokenType] -> Either Errors (Expression, [TokenType])
 parsePrefixExpression x = case x of
     (Ident val : cs) -> parseIdent val cs
@@ -98,6 +108,7 @@ parsePrefixExpression x = case x of
     (Bang : cs) -> parseNot cs
     (Minus : cs) -> parseNegative cs
     (LParen : cs) -> parseGrouped cs
+    (If : cs) -> parseIf cs
     (c : _) -> Left ["Is not a prefix type " ++ show c]
     [] -> Left ["Emptry token list"]
 
@@ -150,3 +161,23 @@ parseNegative xs = first NegExpr <$> parseExpression Prefix xs
 parseInfix :: (Expression -> c) -> TokenType -> [TokenType] -> Either [String] (c, [TokenType])
 parseInfix _ _ [] = Left ["Missing tokens"]
 parseInfix expr tok xs = first expr <$> parseExpression (mapPredecence tok) xs
+
+parseIf :: [TokenType] -> Either Errors (Expression, [TokenType])
+parseIf token
+    | null token = Left ["Emptry token list"]
+    | head token /= LParen = Left ["Missing left paren"]
+    | otherwise =
+        let
+            helperCons (RParen : LBrace : tok) = parseBlockStatement tok
+            helperCons _ = Left ["Missing {"]
+
+            helperAlt (Else : LBrace : tok) = first Just <$> parseBlockStatement tok
+            helperAlt (Else : _) = Left ["missing block statement else { x }"]
+            helperAlt [] = Left ["no more tokens"]
+            helperAlt toks = Right (Nothing, toks)
+         in
+            do
+                (cond, toksOuter) <- parseExpression Lowest (tail token)
+                (cons, toksInner) <- helperCons toksOuter
+                (alt, toks) <- helperAlt toksInner
+                Right (IfExpr cond cons alt, toks)
