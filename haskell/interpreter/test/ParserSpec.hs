@@ -11,8 +11,10 @@ spec = do
     testReturnStatements
     testIdentifierExpression
     testIntegerLitteralsExpression
+    testBooleanExpression
     testPrefixExpression
     testInfixExpression
+    testOperandPrecedence
 
 testLetStatements :: SpecWith ()
 testLetStatements =
@@ -63,6 +65,14 @@ testIdentifierExpression =
                         [ Ast.ExpressionStatement $ Ast.IdentExpr "foobar"
                         ]
             parse input `shouldBe` expected
+        it "simple foobnar example" $ do
+            let
+                input = "foobar;"
+                expected =
+                    Right . Ast.Program $
+                        [ Ast.ExpressionStatement $ Ast.IdentExpr "foobar"
+                        ]
+            parse input `shouldBe` expected
 
 testIntegerLitteralsExpression :: SpecWith ()
 testIntegerLitteralsExpression =
@@ -81,6 +91,26 @@ testIntegerLitteralsExpression =
                 expected =
                     Right . Ast.Program $
                         [ Ast.ExpressionStatement $ Ast.IntegerExpr 666
+                        ]
+            parse input `shouldBe` expected
+
+testBooleanExpression :: SpecWith ()
+testBooleanExpression =
+    describe "TestBooleanExpression" $ do
+        it "simple true" $ do
+            let
+                input = "true;"
+                expected =
+                    Right . Ast.Program $
+                        [ Ast.ExpressionStatement $ Ast.BooleanExpr True
+                        ]
+            parse input `shouldBe` expected
+        it "simple false" $ do
+            let
+                input = "false;"
+                expected =
+                    Right . Ast.Program $
+                        [ Ast.ExpressionStatement $ Ast.BooleanExpr False
                         ]
             parse input `shouldBe` expected
 
@@ -163,7 +193,31 @@ testInfixExpression =
                         ]
                     ]
             expected `shouldBe` gotten
+        it "boolean comparisions" $ do
+            let
+                expected =
+                    [ Right . Ast.Program $ [Ast.ExpressionStatement x]
+                    | x <-
+                        [ Ast.EqExpr (Ast.BooleanExpr True) (Ast.BooleanExpr True)
+                        , Ast.NeqExpr (Ast.BooleanExpr True) (Ast.BooleanExpr False)
+                        , Ast.NeqExpr (Ast.BooleanExpr False) (Ast.BooleanExpr True)
+                        , Ast.EqExpr (Ast.BooleanExpr False) (Ast.BooleanExpr False)
+                        ]
+                    ]
+                gotten =
+                    [ parse x
+                    | x <-
+                        [ "true == true"
+                        , "true != false"
+                        , "false != true"
+                        , "false == false"
+                        ]
+                    ]
+            expected `shouldBe` gotten
 
+testOperandPrecedence :: SpecWith ()
+testOperandPrecedence =
+    describe "TestOperandPrecedence" $ do
         it "test operand precedence" $ do
             let
                 tests =
@@ -179,6 +233,15 @@ testInfixExpression =
                     , ("5 > 4 == 3 < 4", "((5 > 4) == (3 < 4))")
                     , ("5 < 4 != 3 > 4", "((5 < 4) != (3 > 4))")
                     , ("3 + 4 * 5 == 3 * 1 + 4 * 5", "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))")
+                    , ("true", "true")
+                    , ("false", "false")
+                    , ("3 > 5 == false", "((3 > 5) == false)")
+                    , ("3 < 5 == true", "((3 < 5) == true)")
+                    , ("1 + (2 + 3) + 4", "((1 + (2 + 3)) + 4)")
+                    , ("(5 + 5) * 2", "((5 + 5) * 2)")
+                    , ("2 / (5 + 5)", "(2 / (5 + 5))")
+                    , ("-(5 + 5)", "(-(5 + 5))")
+                    , ("!(true == true)", "(!(true == true))")
                     ]
 
             [show . parse . fst $ i | i <- tests] `shouldBe` ["Right " ++ snd i | i <- tests]

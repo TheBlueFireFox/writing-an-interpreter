@@ -1,4 +1,4 @@
-module Parser (module Parser) where
+module Parser (parse) where
 
 import Ast (Expression (..), Program (Program), Statement (..))
 import Control.Arrow (first)
@@ -93,8 +93,11 @@ parsePrefixExpression :: [TokenType] -> Either Errors (Expression, [TokenType])
 parsePrefixExpression x = case x of
     (Ident val : cs) -> parseIdent val cs
     (Int val : cs) -> parseInt64 val cs
+    (KTrue : cs) -> parseBool True cs
+    (KFalse : cs) -> parseBool False cs
     (Bang : cs) -> parseNot cs
     (Minus : cs) -> parseNegative cs
+    (LParen : cs) -> parseGrouped cs
     (c : _) -> Left ["Is not a prefix type " ++ show c]
     [] -> Left ["Emptry token list"]
 
@@ -121,11 +124,22 @@ parseInfixExpression pre left toks@(tok : xs)
 parseExpression :: Predecence -> ParseExpression
 parseExpression pre xs = uncurry (parseInfixExpression pre) =<< parsePrefixExpression xs
 
+parseGrouped :: [TokenType] -> Either [String] (Expression, [TokenType])
+parseGrouped xs =
+    let
+        helper expr (RParen : cs) = Right (expr, cs)
+        helper _ _ = Left ["not a completed group"]
+     in
+        uncurry helper =<< parseExpression Lowest xs
+
 parseIdent :: String -> [TokenType] -> Either Errors (Expression, [TokenType])
 parseIdent val xs = Right (IdentExpr val, xs)
 
 parseInt64 :: Int64 -> [TokenType] -> Either Errors (Expression, [TokenType])
 parseInt64 val xs = Right (IntegerExpr val, xs)
+
+parseBool :: Bool -> [TokenType] -> Either Errors (Expression, [TokenType])
+parseBool val xs = Right (BooleanExpr val, xs)
 
 parseNot :: [TokenType] -> Either Errors (Expression, [TokenType])
 parseNot xs = first NotExpr <$> parseExpression Prefix xs

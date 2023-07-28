@@ -25,6 +25,7 @@ instance Show Statement where
 data Expression
     = IdentExpr String
     | IntegerExpr Int64
+    | BooleanExpr Bool
     | NegExpr Expression
     | NotExpr Expression
     | AddExpr Expression Expression
@@ -47,6 +48,8 @@ showHelperTwo sym l r = "(" ++ show l ++ " " ++ sym ++ " " ++ show r ++ ")"
 instance Show Expression where
     show (IdentExpr lit) = lit
     show (IntegerExpr lit) = show lit
+    show (BooleanExpr True) = "true"
+    show (BooleanExpr False) = "false"
     show (NegExpr expr) = showHelperSingle "-" expr
     show (NotExpr expr) = showHelperSingle "!" expr
     show (AddExpr l r) = showHelperTwo "+" l r
