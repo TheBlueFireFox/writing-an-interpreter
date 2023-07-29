@@ -16,42 +16,45 @@ spec = do
     testInfixExpression
     testOperandPrecedence
     testIfExpression
+    testFunctionLitteralExpression
 
 testLetStatements :: SpecWith ()
 testLetStatements =
-    describe "TestLetStatements" $ it "TestLetStatements" $ do
-        let
-            input =
-                "\
-                \ let x = 5; \
-                \ let y = 10; \
-                \ let foobar = 838383; \
-                \"
-            expected =
-                Right . Ast.Program $
-                    [ Ast.LetStatement "x" Ast.Invalid
-                    , Ast.LetStatement "y" Ast.Invalid
-                    , Ast.LetStatement "foobar" Ast.Invalid
-                    ]
-        parse input `shouldBe` expected
+    describe "TestLetStatements" $ do
+        it "TestLetStatements" $ do
+            let
+                input =
+                    "\
+                    \ let x = 5; \
+                    \ let y = 10; \
+                    \ let foobar = 838383; \
+                    \"
+                expected =
+                    Right . Ast.Program $
+                        [ Ast.LetStatement "x" Ast.Invalid
+                        , Ast.LetStatement "y" Ast.Invalid
+                        , Ast.LetStatement "foobar" Ast.Invalid
+                        ]
+            parse input `shouldBe` expected
 
 testReturnStatements :: SpecWith ()
 testReturnStatements =
-    describe "TestReturnStatements" $ it "TestReturnStatements" $ do
-        let
-            input =
-                "\
-                \return 5;\
-                \return 10;\
-                \return 993322;\
-                \"
-            expected =
-                (Right . Ast.Program)
-                    [ Ast.ReturnStatement Ast.Invalid
-                    , Ast.ReturnStatement Ast.Invalid
-                    , Ast.ReturnStatement Ast.Invalid
-                    ]
-        parse input `shouldBe` expected
+    describe "TestReturnStatements" $ do
+        it "TestReturnStatements" $ do
+            let
+                input =
+                    "\
+                    \return 5;\
+                    \return 10;\
+                    \return 993322;\
+                    \"
+                expected =
+                    (Right . Ast.Program)
+                        [ Ast.ReturnStatement Ast.Invalid
+                        , Ast.ReturnStatement Ast.Invalid
+                        , Ast.ReturnStatement Ast.Invalid
+                        ]
+            parse input `shouldBe` expected
 
 testIdentifierExpression :: SpecWith ()
 testIdentifierExpression =
@@ -269,6 +272,24 @@ testIfExpression =
                     expected =
                         Right . Ast.Program $
                             [ es $ Ast.IfExpr (Ast.LeExpr (ident "x") (ident "y")) (blk "x") (Just (blk "y"))
+                            ]
+
+                parse input `shouldBe` expected
+
+testFunctionLitteralExpression :: SpecWith ()
+testFunctionLitteralExpression = 
+    let
+        blk inner = Ast.BlockStatement [Ast.ExpressionStatement inner]
+        ident = Ast.IdentExpr
+        es = Ast.ExpressionStatement
+     in
+        describe "TestFuntionLitterals" $ do
+            it "simple function litterals" $ do
+                let 
+                    input = "fn(x, y) { x + y; }"
+                    expected =
+                        Right . Ast.Program $
+                            [ es $ Ast.FnExpr [ident "x", ident "y"] (blk (Ast.AddExpr (ident "x") (ident "y")))
                             ]
 
                 parse input `shouldBe` expected

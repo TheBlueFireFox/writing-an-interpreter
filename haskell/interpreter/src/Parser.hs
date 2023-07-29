@@ -1,3 +1,6 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Move brackets to avoid $" #-}
 module Parser (parse) where
 
 import Ast (Expression (..), Program (Program), Statement (..))
@@ -8,9 +11,6 @@ import Lexer (run)
 import Token (TokenType (..))
 
 type Errors = [String]
-
-type ParseStatement = [Token.TokenType] -> Either Errors (Statement, [Token.TokenType])
-type ParseExpression = [Token.TokenType] -> Either Errors (Expression, [Token.TokenType])
 
 data Predecence
     = Lowest
@@ -45,7 +45,7 @@ parse str =
      in
         helper [] . Lexer.run $ str
 
-parseStatement :: ParseStatement
+parseStatement :: [TokenType] -> Either [String] (Statement, [TokenType])
 parseStatement =
     let
         inner [] = Left ["Empty Statement"]
@@ -55,7 +55,7 @@ parseStatement =
      in
         inner
 
-parseLetStatements :: ParseStatement
+parseLetStatements :: [TokenType] -> Either [String] (Statement, [TokenType])
 parseLetStatements [] = Left ["Missing Tokens"]
 parseLetStatements (x : xs) =
     let
@@ -69,7 +69,7 @@ parseLetStatements (x : xs) =
      in
         first . LetStatement <$> ident x <*> expr xs
 
-parseReturnStatements :: ParseStatement
+parseReturnStatements :: [TokenType] -> Either [String] (Statement, [TokenType])
 parseReturnStatements [] = Left ["Missing Token"]
 parseReturnStatements xs =
     let
@@ -80,7 +80,7 @@ parseReturnStatements xs =
      in
         first ReturnStatement <$> expr xs
 
-parseExpressionStatement :: ParseStatement
+parseExpressionStatement :: [TokenType] -> Either [String] (Statement, [TokenType])
 parseExpressionStatement [] = Left ["Empty expression"]
 parseExpressionStatement xs =
     let
@@ -109,6 +109,7 @@ parsePrefixExpression x = case x of
     (Minus : cs) -> parseNegative cs
     (LParen : cs) -> parseGrouped cs
     (If : cs) -> parseIf cs
+    (Function : cs) -> parseFnLit cs
     (c : _) -> Left ["Is not a prefix type " ++ show c]
     [] -> Left ["Emptry token list"]
 
@@ -132,7 +133,7 @@ parseInfixExpression pre left toks@(tok : xs)
                 Gt -> runner GtExpr
                 _ -> Right (left, toks)
 
-parseExpression :: Predecence -> ParseExpression
+parseExpression :: Predecence -> [TokenType] -> Either Errors (Expression, [TokenType])
 parseExpression pre xs = uncurry (parseInfixExpression pre) =<< parsePrefixExpression xs
 
 parseGrouped :: [TokenType] -> Either [String] (Expression, [TokenType])
@@ -164,7 +165,7 @@ parseInfix expr tok xs = first expr <$> parseExpression (mapPredecence tok) xs
 
 parseIf :: [TokenType] -> Either Errors (Expression, [TokenType])
 parseIf token
-    | null token = Left ["Emptry token list"]
+    | null token = Left ["Empty token list"]
     | head token /= LParen = Left ["Missing left paren"]
     | otherwise =
         let
@@ -181,3 +182,37 @@ parseIf token
                 (cons, toksInner) <- helperCons toksOuter
                 (alt, toks) <- helperAlt toksInner
                 Right (IfExpr cond cons alt, toks)
+
+parseFnLit :: [TokenType] -> Either Errors (Expression, [TokenType])
+parseFnLit token
+    | null token = Left ["Empty token list"]
+    | head token /= LParen = Left ["Missing left paren"]
+    | otherwise =
+        let
+            helperIdentToks (Ident ident : xs) = Right (Ast.IdentExpr ident, xs)
+            helperIdentToks (x : _) = Left ["Not a ident " ++ show x]
+            helperIdentToks [] = Left ["Emptry token list"]
+
+            helperParseParamsPreCond (acc, toks)
+                | null toks = Left ["Emptry token list"]
+                | head toks == LParen = helperParseParamsLoopCond . first (: acc) =<< helperIdentToks (tail toks)
+                | otherwise = Left ["Weird token " ++ show toks]
+
+            helperParseParamsLoopCond (acc, toks)
+                | null toks = Left ["Emptry token list"]
+                | head toks == RParen = Right (reverse acc, toks)
+                | head toks == Comma = helperParseParamsLoopCond . first (: acc) =<< helperIdentToks (tail toks)
+                | otherwise = Left ["Odd Token for params " ++ show (head toks)]
+
+            helperParseParamsPostCond (expr, toks)
+                | null toks = Left ["Empty token list"]
+                | head toks /= RParen = Left ["Missing RParen )" ++ show toks]
+                | toks !! 1 /= LBrace = Left ["Missing LBrace {" ++ show toks]
+                | otherwise = Right (expr, drop 2 toks)
+
+            helperParseParams toks = helperParseParamsPostCond =<< helperParseParamsPreCond ([], toks)
+         in
+            do
+                (params, token') <- helperParseParams token
+                (body, token'') <- parseBlockStatement token'
+                Right (FnExpr params body, token'')
