@@ -1,10 +1,7 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
-{-# HLINT ignore "Move brackets to avoid $" #-}
 module Parser (parse) where
 
 import Ast (Expression (..), Program (Program), Statement (..))
-import Control.Arrow (first)
+import Control.Arrow (first, second)
 import Data.Bifunctor (Bifunctor (bimap))
 import Data.Int (Int64)
 import Lexer (run)
@@ -33,6 +30,7 @@ mapPredecence xs =
         Minus -> Sum
         Slash -> Product
         Asterisk -> Product
+        LParen -> Call
         _ -> Lowest
 
 parse :: String -> Either Errors Program
@@ -59,12 +57,14 @@ parseLetStatements :: [TokenType] -> Either [String] (Statement, [TokenType])
 parseLetStatements [] = Left ["Missing Tokens"]
 parseLetStatements (x : xs) =
     let
+        removeSemi (Semicolon : cs) = cs
+        removeSemi cs = cs
+
         ident (Token.Ident iden) = Right iden
         ident _ = Left ["Invalid Token Position"]
-        -- invliad expression
-        -- TODO: We are skipping the expression until we encounter a semicolon
+
         expr [] = Left ["Empty expression"]
-        expr (Token.Assign : cs) = Right (Invalid, (tail . dropWhile (/= Semicolon)) cs)
+        expr (Token.Assign : cs) = second removeSemi <$> parseExpression Lowest cs
         expr (c : _) = Left ["Invalid stuff -- " ++ show c]
      in
         first . LetStatement <$> ident x <*> expr xs
@@ -73,10 +73,10 @@ parseReturnStatements :: [TokenType] -> Either [String] (Statement, [TokenType])
 parseReturnStatements [] = Left ["Missing Token"]
 parseReturnStatements xs =
     let
-        expr [] = Left ["Empty expression"]
-        -- invliad expression
-        -- TODO: We are skipping the expression until we encounter a semicolon
-        expr cs = Right (Invalid, (tail . dropWhile (/= Semicolon)) cs)
+        removeSemi (Semicolon : cs) = cs
+        removeSemi cs = cs
+
+        expr cs = second removeSemi <$> parseExpression Lowest cs
      in
         first ReturnStatement <$> expr xs
 
@@ -131,12 +131,30 @@ parseInfixExpression pre left toks@(tok : xs)
                 NotEq -> runner NeqExpr
                 Lt -> runner LeExpr
                 Gt -> runner GtExpr
+                LParen -> parseCallExpression left xs
                 _ -> Right (left, toks)
 
 parseExpression :: Predecence -> [TokenType] -> Either Errors (Expression, [TokenType])
 parseExpression pre xs = uncurry (parseInfixExpression pre) =<< parsePrefixExpression xs
 
-parseGrouped :: [TokenType] -> Either [String] (Expression, [TokenType])
+parseCallExpression :: Expression -> [TokenType] -> Either Errors (Expression, [TokenType])
+parseCallExpression left toks =
+    let
+        parseNextExpr = parseExpression Lowest
+
+        helperInner acc toks'
+            | head toks' == Comma = uncurry helperInner . first (: acc) =<< parseNextExpr (tail toks')
+            | head toks' == RParen = Right (reverse acc, tail toks')
+            | otherwise = Left ["unsupported token " ++ show toks' ++ " in call expression"]
+
+        helperOuter toks'
+            | head toks' == RParen = Right ([], tail toks')
+            -- loop
+            | otherwise = uncurry helperInner . first (: []) =<< parseNextExpr toks'
+     in
+        first (CallExpr left) <$> helperOuter toks
+
+parseGrouped :: [TokenType] -> Either Errors (Expression, [TokenType])
 parseGrouped xs =
     let
         helper expr (RParen : cs) = Right (expr, cs)

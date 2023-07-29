@@ -17,42 +17,43 @@ spec = do
     testOperandPrecedence
     testIfExpression
     testFunctionLitteralExpression
+    testCallExpression
 
 testLetStatements :: SpecWith ()
 testLetStatements =
     describe "TestLetStatements" $ do
-        it "TestLetStatements" $ do
+        it "only constantes and identifiers" $ do
             let
                 input =
                     "\
                     \ let x = 5; \
-                    \ let y = 10; \
-                    \ let foobar = 838383; \
+                    \ let y = true; \
+                    \ let foobar = y; \
                     \"
                 expected =
                     Right . Ast.Program $
-                        [ Ast.LetStatement "x" Ast.Invalid
-                        , Ast.LetStatement "y" Ast.Invalid
-                        , Ast.LetStatement "foobar" Ast.Invalid
+                        [ Ast.LetStatement "x" $ Ast.IntegerExpr 5
+                        , Ast.LetStatement "y" $ Ast.BooleanExpr True
+                        , Ast.LetStatement "foobar" $ Ast.IdentExpr "y"
                         ]
             parse input `shouldBe` expected
 
 testReturnStatements :: SpecWith ()
 testReturnStatements =
     describe "TestReturnStatements" $ do
-        it "TestReturnStatements" $ do
+        it "only constantes and identifiers" $ do
             let
                 input =
                     "\
                     \return 5;\
-                    \return 10;\
-                    \return 993322;\
+                    \return true;\
+                    \return y;\
                     \"
                 expected =
                     (Right . Ast.Program)
-                        [ Ast.ReturnStatement Ast.Invalid
-                        , Ast.ReturnStatement Ast.Invalid
-                        , Ast.ReturnStatement Ast.Invalid
+                        [ Ast.ReturnStatement $ Ast.IntegerExpr 5
+                        , Ast.ReturnStatement $ Ast.BooleanExpr True
+                        , Ast.ReturnStatement $ Ast.IdentExpr "y"
                         ]
             parse input `shouldBe` expected
 
@@ -243,6 +244,9 @@ testOperandPrecedence =
                 , ("2 / (5 + 5)", "(2 / (5 + 5))")
                 , ("-(5 + 5)", "(-(5 + 5))")
                 , ("!(true == true)", "(!(true == true))")
+                , ("a + add(b * c) + d", "((a + add((b * c))) + d)")
+                , ("add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))", "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))")
+                , ("add(a + b + c * d / f + g)", "add((((a + b) + ((c * d) / f)) + g))")
                 ]
 
         [show . parse . fst $ i | i <- tests] `shouldBe` ["Right " ++ snd i | i <- tests]
@@ -277,7 +281,7 @@ testIfExpression =
                 parse input `shouldBe` expected
 
 testFunctionLitteralExpression :: SpecWith ()
-testFunctionLitteralExpression = 
+testFunctionLitteralExpression =
     let
         blk inner = Ast.BlockStatement [Ast.ExpressionStatement inner]
         ident = Ast.IdentExpr
@@ -285,11 +289,40 @@ testFunctionLitteralExpression =
      in
         describe "TestFuntionLitterals" $ do
             it "simple function litterals" $ do
-                let 
+                let
                     input = "fn(x, y) { x + y; }"
                     expected =
                         Right . Ast.Program $
-                            [ es $ Ast.FnExpr [ident "x", ident "y"] (blk (Ast.AddExpr (ident "x") (ident "y")))
+                            [ es $
+                                Ast.FnExpr
+                                    [ ident "x"
+                                    , ident "y"
+                                    ]
+                                    (blk (Ast.AddExpr (ident "x") (ident "y")))
+                            ]
+
+                parse input `shouldBe` expected
+
+testCallExpression :: SpecWith ()
+testCallExpression =
+    let
+        ident = Ast.IdentExpr
+        int = Ast.IntegerExpr
+        es = Ast.ExpressionStatement
+     in
+        describe "TestCallExpression" $ do
+            it "call expression" $ do
+                let
+                    input = "add(1, 2 * 3, 4 + 5);"
+                    expected =
+                        Right . Ast.Program $
+                            [ es $
+                                Ast.CallExpr
+                                    (ident "add")
+                                    [ int 1
+                                    , Ast.MulExpr (int 2) (int 3)
+                                    , Ast.AddExpr (int 4) (int 5)
+                                    ]
                             ]
 
                 parse input `shouldBe` expected

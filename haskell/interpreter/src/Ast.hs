@@ -39,7 +39,8 @@ data Expression
     | GtExpr Expression Expression
     | LeExpr Expression Expression
     | IfExpr Expression Statement (Maybe Statement) -- Condition BlockStatement BlockStatement
-    | FnExpr [Expression] Statement -- Params BlockStatement 
+    | FnExpr [Expression] Statement -- Params BlockStatement
+    | CallExpr Expression [Expression] -- Function Arguments
     | Invalid
     deriving (Eq)
 
@@ -75,7 +76,5 @@ instance Show Expression where
     show (LeExpr l r) = showHelperTwo "<" l r
     show (IfExpr cond cons alt) = showHelperIf cond cons alt
     show (FnExpr param blk) = "fun (" ++ intercalate ", " (map show param) ++ ")" ++ show blk
+    show (CallExpr fn param) = show fn ++ "(" ++ intercalate ", " (map show param) ++ ")"
     show Invalid = "InvalidExpression"
-
-
-
