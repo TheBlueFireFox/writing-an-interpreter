@@ -4,7 +4,7 @@ import Control.Monad (forever)
 import GHC.IO.Handle (hFlush)
 import System.IO (stdout)
 
-import Lexer (new, tokenize)
+import Parser (parse)
 
 promt :: String
 promt = ">> "
@@ -16,11 +16,11 @@ printPromt = do
 
 printLine :: String -> IO ()
 printLine s = do
-    putStr s
+    putStrLn s
     hFlush stdout
 
 runner :: IO ()
 runner = forever $ do
     printPromt
     line <- getLine
-    printLine $ concatMap (\v -> "{ " ++ show v ++ " } \n") $ (fst . tokenize . new) line
+    printLine $ (show . parse) line
