@@ -3,6 +3,7 @@ module Parser (parse) where
 import Ast (Expression (..), Program (Program), Statement (..))
 import Control.Arrow (first, second)
 import Data.Bifunctor (Bifunctor (bimap))
+import Data.Bool (bool)
 import Data.Int (Int64)
 import Lexer (run)
 import Token (TokenType (..))
@@ -48,18 +49,18 @@ parseStatement =
     let
         inner [] = Left ["Empty Statement"]
         inner (Token.Let : xs) = parseLetStatements xs
-        inner (Token.Return : xs) = parseReturnStatements xs
-        inner xs = parseExpressionStatement xs
+        inner (Token.Return : xs) = bimap ReturnStatement removeSemi <$> parseExpression Lowest xs
+        inner xs = bimap ExpressionStatement removeSemi <$> parseExpression Lowest xs
      in
         inner
+
+removeSemi :: [TokenType] -> [TokenType]
+removeSemi cs = bool cs (tail cs) (head cs == Semicolon)
 
 parseLetStatements :: [TokenType] -> Either [String] (Statement, [TokenType])
 parseLetStatements [] = Left ["Missing Tokens"]
 parseLetStatements (x : xs) =
     let
-        removeSemi (Semicolon : cs) = cs
-        removeSemi cs = cs
-
         ident (Token.Ident iden) = Right iden
         ident _ = Left ["Invalid Token Position"]
 
@@ -68,26 +69,6 @@ parseLetStatements (x : xs) =
         expr (c : _) = Left ["Invalid stuff -- " ++ show c]
      in
         first . LetStatement <$> ident x <*> expr xs
-
-parseReturnStatements :: [TokenType] -> Either [String] (Statement, [TokenType])
-parseReturnStatements [] = Left ["Missing Token"]
-parseReturnStatements xs =
-    let
-        removeSemi (Semicolon : cs) = cs
-        removeSemi cs = cs
-
-        expr cs = second removeSemi <$> parseExpression Lowest cs
-     in
-        first ReturnStatement <$> expr xs
-
-parseExpressionStatement :: [TokenType] -> Either [String] (Statement, [TokenType])
-parseExpressionStatement [] = Left ["Empty expression"]
-parseExpressionStatement xs =
-    let
-        removeSemi (Token.Semicolon : r) = r
-        removeSemi r = r
-     in
-        bimap ExpressionStatement removeSemi <$> parseExpression Lowest xs
 
 parseBlockStatement :: [TokenType] -> Either Errors (Statement, [TokenType])
 parseBlockStatement xs =
@@ -207,20 +188,21 @@ parseFnLit token
     | head token /= LParen = Left ["Missing left paren"]
     | otherwise =
         let
-            helperIdentToks (Ident ident : xs) = Right (Ast.IdentExpr ident, xs)
-            helperIdentToks (x : _) = Left ["Not a ident " ++ show x]
-            helperIdentToks [] = Left ["Emptry token list"]
+            helperIdentToks toks = case toks of
+                [] -> Left ["Emptry token list"]
+                (Ident ident : xs) -> Right (Ast.IdentExpr ident, xs)
+                (x : _) -> Left ["Not a ident " ++ show x]
 
-            helperParseParamsPreCond (acc, toks)
-                | null toks = Left ["Emptry token list"]
-                | head toks == LParen = helperParseParamsLoopCond . first (: acc) =<< helperIdentToks (tail toks)
-                | otherwise = Left ["Weird token " ++ show toks]
+            helperParseParamsPreCond (acc, toks) = case toks of
+                [] -> Left ["Emptry token list"]
+                (LParen : toks') -> helperParseParamsLoopCond . first (: acc) =<< helperIdentToks toks'
+                _ -> Left ["Weird token " ++ show toks]
 
-            helperParseParamsLoopCond (acc, toks)
-                | null toks = Left ["Emptry token list"]
-                | head toks == RParen = Right (reverse acc, toks)
-                | head toks == Comma = helperParseParamsLoopCond . first (: acc) =<< helperIdentToks (tail toks)
-                | otherwise = Left ["Odd Token for params " ++ show (head toks)]
+            helperParseParamsLoopCond (acc, toks) = case toks of
+                [] -> Left ["Emptry token list"]
+                (RParen : _) -> Right (reverse acc, toks)
+                (Comma : toks') -> helperParseParamsLoopCond . first (: acc) =<< helperIdentToks toks'
+                _ -> Left ["Odd Token for params " ++ show (head toks)]
 
             helperParseParamsPostCond (expr, toks)
                 | null toks = Left ["Empty token list"]

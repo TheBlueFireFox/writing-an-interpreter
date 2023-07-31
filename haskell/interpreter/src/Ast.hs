@@ -7,7 +7,7 @@ newtype Program = Program [Statement]
     deriving (Eq)
 
 instance Show Program where
-    show (Program statements) = intercalate "" $ map show statements
+    show (Program statements) = concatMap show statements
 
 data Statement
     = LetStatement String Expression
@@ -21,7 +21,7 @@ instance Show Statement where
     show (LetStatement name expr) = "let " ++ name ++ " = " ++ show expr ++ ";"
     show (ReturnStatement expr) = "return " ++ show expr ++ ";"
     show (ExpressionStatement expr) = show expr
-    show (BlockStatement exprs) = intercalate "" $ map show exprs
+    show (BlockStatement exprs) = concatMap show exprs
     show InvalidStatement = "InvalidStatement -.-;"
 
 data Expression
@@ -50,14 +50,8 @@ showHelperSingle sym expr = "(" ++ sym ++ show expr ++ ")"
 showHelperTwo :: (Show a1, Show a2) => String -> a1 -> a2 -> String
 showHelperTwo sym l r = "(" ++ show l ++ " " ++ sym ++ " " ++ show r ++ ")"
 
-showHelperIf :: (Show a, Show p1, Show p2) => p1 -> p2 -> Maybe a -> [Char]
-showHelperIf cond cons alt =
-    let
-        hasAlt (Just altBlock) = "else " ++ show altBlock
-        hasAlt Nothing = ""
-        base = "if " ++ show cond ++ " " ++ show cons
-     in
-        base ++ hasAlt alt
+showHelperIf :: (Show a1, Show a2, Show a3) => a1 -> a2 -> Maybe a3 -> [Char]
+showHelperIf cond cons alt = "if " ++ show cond ++ " " ++ show cons ++ maybe "" (\x -> "else " ++ show x) alt
 
 instance Show Expression where
     show (IdentExpr lit) = lit
