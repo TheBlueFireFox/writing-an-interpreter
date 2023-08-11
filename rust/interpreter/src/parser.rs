@@ -33,7 +33,8 @@ impl Predecence {
             Token::Minus => Predecence::Sum,
             Token::Slash => Predecence::Product,
             Token::Asterisk => Predecence::Product,
-            t => Predecence::Lowest,
+            Token::LParen => Predecence::Call,
+            _ => Predecence::Lowest,
         }
     }
 }
@@ -54,14 +55,12 @@ impl<'toks, 'input> Parser<'toks, 'input> {
 
         loop {
             let statement = match self.tokens.get(0) {
-                Some(Token::Let) => self.let_statement(),
-                Some(Token::Return) => self.return_statement(),
-                Some(Token::Eof) => {
-                    self.advance(1);
+                Some(Token::Eof) => break,
+                Some(_) => self.parse_statement(),
+                None => {
+                    err.push("Missing EOF".to_string());
                     break;
                 }
-                Some(_) => self.expression_statement(),
-                None => Err("Missing EOF".to_string()),
             };
 
             match statement {
@@ -82,6 +81,15 @@ impl<'toks, 'input> Parser<'toks, 'input> {
         }
     }
 
+    fn parse_statement(&mut self) -> Result<Statement<'input>, String> {
+        match self.tokens.get(0) {
+            Some(Token::Let) => self.let_statement(),
+            Some(Token::Return) => self.return_statement(),
+            Some(_) => self.expression_statement(),
+            None => Err("Empty token list".to_string()),
+        }
+    }
+
     fn advance(&mut self, by: usize) {
         self.tokens = &self.tokens[by..];
     }
@@ -93,6 +101,7 @@ impl<'toks, 'input> Parser<'toks, 'input> {
                     self.advance(1);
                     break;
                 }
+                Some(Token::Eof) => break,
                 Some(_) => self.advance(1),
                 None => break,
             }
@@ -113,9 +122,9 @@ impl<'toks, 'input> Parser<'toks, 'input> {
         match self.tokens {
             &[Token::Let, Token::Ident(name), Token::Assign, ..] => {
                 self.advance(3);
-                // TODO: skipping expressions for the moment
+                let expr = self.parse_expression(Predecence::Lowest)?;
                 self.advance_after_semicolon();
-                Ok(Statement::Let(name, Expression::Invalid))
+                Ok(Statement::Let(name, expr))
             }
             &[Token::Let, Token::Ident(_), ..] => {
                 Err("Expected an '=' after the let identifier".to_string())
@@ -128,10 +137,9 @@ impl<'toks, 'input> Parser<'toks, 'input> {
     fn return_statement(&mut self) -> Result<Statement<'input>, String> {
         // remove return
         self.advance(1);
-
-        // TODO: skipping expressions for the moment
+        let expr = self.parse_expression(Predecence::Lowest)?;
         self.advance_after_semicolon();
-        Ok(Statement::Return(Expression::Invalid))
+        Ok(Statement::Return(expr))
     }
 
     fn parse_expression(&mut self, pred: Predecence) -> Result<Expression<'input>, String> {
@@ -162,8 +170,8 @@ impl<'toks, 'input> Parser<'toks, 'input> {
             Some(Token::Minus) => self.parse_neg(),
             Some(Token::False) => self.parse_bool(false),
             Some(Token::True) => self.parse_bool(true),
-            Some(Token::If) => todo!(),
-            Some(Token::Fun) => todo!(),
+            Some(Token::If) => self.parse_if(),
+            Some(Token::Fun) => self.parse_fn(),
             Some(Token::LParen) => self.parse_grouped(),
             Some(token) => Err(format!("Illegal token <{:?}> is not a prefix", token)),
             None => Err("No toke for a prefix found".to_string()),
@@ -184,7 +192,10 @@ impl<'toks, 'input> Parser<'toks, 'input> {
             Token::Neq => &|l, r| Expression::Neq(l, r),
             Token::Lt => &|l, r| Expression::Le(l, r),
             Token::Gt => &|l, r| Expression::Gt(l, r),
-            Token::LParen => todo!(),
+            Token::LParen => {
+                self.advance(1);
+                return self.parse_call(left);
+            }
             _ => return Ok(left),
         };
 
@@ -197,16 +208,135 @@ impl<'toks, 'input> Parser<'toks, 'input> {
     }
 
     fn parse_grouped(&mut self) -> Result<Expression<'input>, String> {
-        println!("foo {:?}",self.tokens);
         self.advance(1);
         let expr = self.parse_expression(Predecence::Lowest)?;
 
-        println!("foo {:?}",self.tokens);
         if let Token::RParen = self.tokens[0] {
             self.advance(1);
             return Ok(expr);
         }
         Err("Missing Right Paren )".to_string())
+    }
+
+    fn parse_if(&mut self) -> Result<Expression<'input>, String> {
+        self.advance(1);
+
+        let curr = &self.tokens[0];
+        self.advance(1);
+        if Token::LParen != *curr {
+            return Err(format!("Invalid token expected an '(' but got {:?}", curr));
+        }
+        let cond = self.parse_expression(Predecence::Lowest)?;
+        let cons = match self.tokens {
+            &[Token::RParen, Token::LBrace, ..] => {
+                self.advance(2);
+                self.parse_block()
+            }
+            &[Token::RParen, ..] => Err("Missing {".to_string()),
+            _ => Err("Missing )".to_string()),
+        }?;
+
+        let alt = if let Some(Token::Else) = self.tokens.get(0) {
+            if let Some(Token::LBrace) = self.tokens.get(1) {
+                self.advance(2);
+                Some(Box::new(self.parse_block()?))
+            } else {
+                return Err("Missing LBrace {".to_string());
+            }
+        } else {
+            None
+        };
+
+        Ok(Expression::If(Box::new(cond), Box::new(cons), alt))
+    }
+
+    fn parse_block(&mut self) -> Result<Statement<'input>, String> {
+        let mut statements = Vec::new();
+
+        loop {
+            match self.tokens.get(0) {
+                Some(Token::RBrace) => {
+                    self.advance(1);
+                    break;
+                }
+                Some(Token::Eof) => return Err("Missing RPrace".to_string()),
+                None => return Err("Missing EOF".to_string()),
+                Some(_) => {
+                    let blk = self.parse_statement()?;
+                    statements.push(blk);
+                }
+            }
+        }
+
+        Ok(Statement::Block(statements))
+    }
+
+    fn parse_fn(&mut self) -> Result<Expression<'input>, String> {
+        self.advance(1);
+        if Token::LParen != self.tokens[0] {
+            return Err("Err missing LParen".to_string());
+        }
+        self.advance(1);
+        let params = self.parse_fn_params()?;
+
+        if Token::LBrace != self.tokens[0] {
+            return Err("Err missing LBrace".to_string());
+        }
+        self.advance(1);
+
+        let body = self.parse_block()?;
+
+        Ok(Expression::Fn(params, Box::new(body)))
+    }
+
+    fn parse_fn_params(&mut self) -> Result<Vec<Expression<'input>>, String> {
+        let mut res = Vec::new();
+
+        if Token::RParen == self.tokens[0] {
+            self.advance(1);
+            return Ok(res);
+        }
+
+        let ident = |v: &Token<'input>| {
+            if let Token::Ident(v) = *v {
+                Ok(Expression::Ident(v))
+            } else {
+                Err(format!("Incorrect token type expected ident {:?}", v))
+            }
+        };
+
+        res.push(ident(&self.tokens[0])?);
+        self.advance(1);
+
+        while let Token::Comma = self.tokens[0] {
+            res.push(ident(&self.tokens[1])?);
+            self.advance(2);
+        }
+
+        if Token::RParen != self.tokens[0] {
+            return Err("Missing RParen".to_string());
+        }
+        self.advance(1);
+
+        Ok(res)
+    }
+
+    fn parse_call(&mut self, left: Expression<'input>) -> Result<Expression<'input>, String> {
+        let mut args = Vec::new();
+
+        args.push(self.parse_expression(Predecence::Lowest)?);
+
+        while let Token::Comma = self.tokens[0] {
+            self.advance(1);
+            args.push(self.parse_expression(Predecence::Lowest)?);
+        }
+
+        if Token::RParen != self.tokens[0] {
+            return Err("Missing RParen".to_string());
+        }
+        self.advance(1);
+
+        Ok(Expression::Call(Box::new(left), args))
     }
 
     fn parse_ident(&mut self, ident: &'input str) -> Result<Expression<'input>, String> {
@@ -239,6 +369,8 @@ impl<'toks, 'input> Parser<'toks, 'input> {
 
 #[cfg(test)]
 mod tests {
+    use std::vec;
+
     use super::*;
     use crate::ast::{Expression, Statement, BE};
 
@@ -264,15 +396,15 @@ mod tests {
     fn test_let_statement() {
         let input = "
             let x = 5; 
-            let y = 10;
-            let foobar = 838383;
+            let y = true;
+            let foobar = y;
             ";
 
         // TODO: replace Expression::Invalid with correct variant
         let exp = [
-            Statement::Let("x", Expression::Invalid),
-            Statement::Let("y", Expression::Invalid),
-            Statement::Let("foobar", Expression::Invalid),
+            Statement::Let("x", Expression::Int(5)),
+            Statement::Let("y", Expression::Bool(true)),
+            Statement::Let("foobar", Expression::Ident("y")),
         ];
 
         eq(input, &exp)
@@ -282,13 +414,13 @@ mod tests {
     fn test_return_statement() {
         let input = "
                 return 5;
-                return 10;
-                return 993322;
+                return false;
+                return y;
                 ";
         let exp = [
-            Statement::Return(Expression::Invalid),
-            Statement::Return(Expression::Invalid),
-            Statement::Return(Expression::Invalid),
+            Statement::Return(Expression::Int(5)),
+            Statement::Return(Expression::Bool(false)),
+            Statement::Return(Expression::Ident("y")),
         ];
 
         eq(input, &exp);
@@ -415,10 +547,118 @@ mod tests {
             ("2 / (5 + 5)", "(2 / (5 + 5))"),
             ("-(5 + 5)", "(-(5 + 5))"),
             ("!(true == true)", "(!(true == true))"),
+            ("a + add(b * c) + d", "((a + add((b * c))) + d)"),
+            (
+                "add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))",
+                "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))",
+            ),
+            (
+                "add(a + b + c * d / f + g)",
+                "add((((a + b) + ((c * d) / f)) + g))",
+            ),
         ];
 
         for (input, exp) in lst {
             assert_eq!(exp, format!("{}", parse(input).unwrap()));
         }
+    }
+
+    #[test]
+    fn test_if() {
+        let input = "if (x < y) { x }";
+        let blk = |v| {
+            Box::new(Statement::Block(vec![Statement::Expression(
+                Expression::Ident(v),
+            )]))
+        };
+        let ident = |v| Box::new(Expression::Ident(v));
+        let cond = |l, r| Box::new(Expression::Le(l, r));
+        let exp = [Statement::Expression(Expression::If(
+            cond(ident("x"), ident("y")),
+            blk("x"),
+            None,
+        ))];
+        eq(input, &exp);
+    }
+
+    #[test]
+    fn test_if_else() {
+        let input = "if (x < y) { x } else { y }";
+        let blk = |v| {
+            Box::new(Statement::Block(vec![Statement::Expression(
+                Expression::Ident(v),
+            )]))
+        };
+        let ident = |v| Box::new(Expression::Ident(v));
+        let cond = |l, r| Box::new(Expression::Le(l, r));
+        let exp = [Statement::Expression(Expression::If(
+            cond(ident("x"), ident("y")),
+            blk("x"),
+            Some(blk("y")),
+        ))];
+        eq(input, &exp);
+    }
+
+    #[test]
+    fn test_fn_lit() {
+        let input = "fn(x, y) { x + y; }";
+
+        let ident = |v| Expression::Ident(v);
+        let bident = |v| Box::new(ident(v));
+        let blk = |v| Box::new(Statement::Block(vec![Statement::Expression(v)]));
+        let add = |l, r| Expression::Add(l, r);
+
+        let exp = [Statement::Expression(Expression::Fn(
+            vec![ident("x"), ident("y")],
+            blk(add(bident("x"), bident("y"))),
+        ))];
+
+        eq(input, &exp);
+    }
+
+    #[test]
+    fn test_fn_lit_complex() {
+        let input = ["fn() {};", "fn(x) {};", "fn(x, y) {};", "fn(x, y, z) {};"];
+
+        let ident = |v| Expression::Ident(v);
+        let blk = || Box::new(Statement::Block(vec![]));
+
+        let exp = [
+            [Statement::Expression(Expression::Fn(vec![], blk()))],
+            [Statement::Expression(Expression::Fn(
+                vec![ident("x")],
+                blk(),
+            ))],
+            [Statement::Expression(Expression::Fn(
+                vec![ident("x"), ident("y")],
+                blk(),
+            ))],
+            [Statement::Expression(Expression::Fn(
+                vec![ident("x"), ident("y"), ident("z")],
+                blk(),
+            ))],
+        ];
+
+        for (input, exp) in std::iter::zip(&input, &exp) {
+            eq(input, exp);
+        }
+    }
+
+    #[test]
+    fn test_call_expression_parsing() {
+        let input = "add(1, 2 * 3, 4 + 5);";
+
+        let int = |v| Expression::Int(v);
+        let bint = |v| Box::new(int(v));
+        let ident = |v| Box::new(Expression::Ident(v));
+        let add = |l, r| Expression::Add(l, r);
+        let mul = |l, r| Expression::Mul(l, r);
+
+        let exp = [Statement::Expression(Expression::Call(
+            ident("add"),
+            vec![int(1), mul(bint(2), bint(3)), add(bint(4), bint(5))],
+        ))];
+
+        eq(input, &exp);
     }
 }

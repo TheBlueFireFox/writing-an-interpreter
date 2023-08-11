@@ -58,8 +58,8 @@ pub enum Expression<'input> {
     Eq(BE<'input>, BE<'input>),
     Gt(BE<'input>, BE<'input>),
     Le(BE<'input>, BE<'input>),
-    If(BE<'input>, BE<'input>, Option<BE<'input>>),
-    Fn(Vec<Expression<'input>>, BE<'input>),
+    If(BE<'input>, BS<'input>, Option<BS<'input>>),
+    Fn(Vec<Expression<'input>>, BS<'input>),
     Call(BE<'input>, Vec<Expression<'input>>),
     Invalid,
 }
@@ -74,7 +74,7 @@ impl Display for Expression<'_> {
                 .collect::<Vec<_>>()
                 .join(", ")
         };
-        let alt_cond = |alt: &Option<BE<'_>>| {
+        let alt_cond = |alt: &Option<BS<'_>>| {
             alt.as_ref()
                 .map(|c| format!("else {c}"))
                 .unwrap_or_default()
