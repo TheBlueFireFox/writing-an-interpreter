@@ -249,7 +249,7 @@ testOperandPrecedence =
                 , ("add(a + b + c * d / f + g)", "add((((a + b) + ((c * d) / f)) + g))")
                 ]
 
-        [show . parse . fst $ i | i <- tests] `shouldBe` ["Right " ++ snd i | i <- tests]
+        [dprint <$> (parse . fst) i | i <- tests] `shouldBe` [Right $ snd i | i <- tests]
 
 testIfExpression :: SpecWith ()
 testIfExpression =

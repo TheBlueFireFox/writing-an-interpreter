@@ -1,28 +1,29 @@
-module Ast (Program (..), Statement (..), Expression (..)) where
+module Ast (Program (..), Statement (..), Expression (..), Display (..)) where
 
 import Data.Int (Int64)
 import Data.List (intercalate)
 
-newtype Program = Program [Statement]
-    deriving (Eq)
+class Display a where
+    dprint :: a -> String
 
-instance Show Program where
-    show (Program statements) = concatMap show statements
+newtype Program = Program [Statement]
+    deriving (Eq, Show)
+
+instance Display Program where
+    dprint (Program statements) = concatMap dprint statements
 
 data Statement
     = LetStatement String Expression
     | ReturnStatement Expression
     | ExpressionStatement Expression
     | BlockStatement [Statement]
-    | InvalidStatement
-    deriving (Eq)
+    deriving (Eq, Show)
 
-instance Show Statement where
-    show (LetStatement name expr) = "let " ++ name ++ " = " ++ show expr ++ ";"
-    show (ReturnStatement expr) = "return " ++ show expr ++ ";"
-    show (ExpressionStatement expr) = show expr
-    show (BlockStatement exprs) = concatMap show exprs
-    show InvalidStatement = "InvalidStatement -.-;"
+instance Display Statement where
+    dprint (LetStatement name expr) = "let " ++ name ++ " = " ++ dprint expr ++ ";"
+    dprint (ReturnStatement expr) = "return " ++ dprint expr ++ ";"
+    dprint (ExpressionStatement expr) = dprint expr
+    dprint (BlockStatement exprs) = concatMap dprint exprs
 
 data Expression
     = IdentExpr String
@@ -41,34 +42,37 @@ data Expression
     | IfExpr Expression Statement (Maybe Statement) -- Condition BlockStatement BlockStatement
     | FnExpr [Expression] Statement -- Params BlockStatement
     | CallExpr Expression [Expression] -- Function Arguments
-    | Invalid
-    deriving (Eq)
+    deriving (Eq, Show)
 
-showHelperSingle :: (Show a) => String -> a -> String
-showHelperSingle sym expr = "(" ++ sym ++ show expr ++ ")"
+showHelperSingle :: (Display a) => String -> a -> String
+showHelperSingle sym expr = "(" ++ sym ++ dprint expr ++ ")"
 
-showHelperTwo :: (Show a1, Show a2) => String -> a1 -> a2 -> String
-showHelperTwo sym l r = "(" ++ show l ++ " " ++ sym ++ " " ++ show r ++ ")"
+showHelperTwo :: (Display a1, Display a2) => String -> a1 -> a2 -> String
+showHelperTwo sym l r = "(" ++ dprint l ++ " " ++ sym ++ " " ++ dprint r ++ ")"
 
-showHelperIf :: (Show a1, Show a2, Show a3) => a1 -> a2 -> Maybe a3 -> [Char]
-showHelperIf cond cons alt = "if " ++ show cond ++ " " ++ show cons ++ maybe "" (\x -> "else " ++ show x) alt
+showHelperIf ::
+    (Display a1, Display a2, Display a3) =>
+    a1 ->
+    a2 ->
+    Maybe a3 ->
+    String
+showHelperIf cond cons alt = "if " ++ dprint cond ++ " " ++ dprint cons ++ maybe "" (\x -> "else " ++ dprint x) alt
 
-instance Show Expression where
-    show (IdentExpr lit) = lit
-    show (IntegerExpr lit) = show lit
-    show (BooleanExpr True) = "true"
-    show (BooleanExpr False) = "false"
-    show (NegExpr expr) = showHelperSingle "-" expr
-    show (NotExpr expr) = showHelperSingle "!" expr
-    show (AddExpr l r) = showHelperTwo "+" l r
-    show (MinExpr l r) = showHelperTwo "-" l r
-    show (MulExpr l r) = showHelperTwo "*" l r
-    show (DivExpr l r) = showHelperTwo "/" l r
-    show (NeqExpr l r) = showHelperTwo "!=" l r
-    show (EqExpr l r) = showHelperTwo "==" l r
-    show (GtExpr l r) = showHelperTwo ">" l r
-    show (LeExpr l r) = showHelperTwo "<" l r
-    show (IfExpr cond cons alt) = showHelperIf cond cons alt
-    show (FnExpr param blk) = "fun (" ++ intercalate ", " (map show param) ++ ")" ++ show blk
-    show (CallExpr fn param) = show fn ++ "(" ++ intercalate ", " (map show param) ++ ")"
-    show Invalid = "InvalidExpression"
+instance Display Expression where
+    dprint (IdentExpr lit) = lit
+    dprint (IntegerExpr lit) = show lit
+    dprint (BooleanExpr True) = "true"
+    dprint (BooleanExpr False) = "false"
+    dprint (NegExpr expr) = showHelperSingle "-" expr
+    dprint (NotExpr expr) = showHelperSingle "!" expr
+    dprint (AddExpr l r) = showHelperTwo "+" l r
+    dprint (MinExpr l r) = showHelperTwo "-" l r
+    dprint (MulExpr l r) = showHelperTwo "*" l r
+    dprint (DivExpr l r) = showHelperTwo "/" l r
+    dprint (NeqExpr l r) = showHelperTwo "!=" l r
+    dprint (EqExpr l r) = showHelperTwo "==" l r
+    dprint (GtExpr l r) = showHelperTwo ">" l r
+    dprint (LeExpr l r) = showHelperTwo "<" l r
+    dprint (IfExpr cond cons alt) = showHelperIf cond cons alt
+    dprint (FnExpr param blk) = "fun (" ++ intercalate ", " (map dprint param) ++ ")" ++ dprint blk
+    dprint (CallExpr fn param) = dprint fn ++ "(" ++ intercalate ", " (map dprint param) ++ ")"
