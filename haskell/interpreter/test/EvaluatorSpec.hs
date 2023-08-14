@@ -2,8 +2,7 @@ module EvaluatorSpec (spec) where
 
 import Test.Hspec
 
-import Control.Arrow (first)
-import Data.Bifunctor (Bifunctor (bimap))
+import Data.Bifunctor (Bifunctor (bimap), first)
 import Evaluator (evalProgram)
 import Object qualified
 import Parser (parse)
@@ -13,8 +12,11 @@ spec = do
     testIntegerObj
     testBoolObj
     testBangObj
+    testIfElse
+    testReturn
+    testErrorHandling
 
-testEval :: String -> [Object.Object]
+testEval :: String -> Object.Object
 testEval input = case parse input of
     Left err -> error $ head err
     Right prog -> evalProgram prog
@@ -29,8 +31,8 @@ testIntegerObj = do
                     , "10"
                     ]
                 expected =
-                    [ [Object.IntObj 5]
-                    , [Object.IntObj 10]
+                    [ Object.IntObj 5
+                    , Object.IntObj 10
                     ]
             map testEval input `shouldBe` expected
         it "negation" $ do
@@ -38,7 +40,7 @@ testIntegerObj = do
                 input =
                     ["-5", "-10"]
                 expected =
-                    [[Object.IntObj (-5)], [Object.IntObj (-10)]]
+                    [Object.IntObj (-5), Object.IntObj (-10)]
             map testEval input `shouldBe` expected
         it "evaluation" $ do
             let
@@ -57,7 +59,7 @@ testIntegerObj = do
                     ]
                 (input, expected) = unzip rawInput
 
-            map testEval input `shouldBe` map ((: []) . Object.IntObj) expected
+            map testEval input `shouldBe` map Object.IntObj expected
 
 testBoolObj :: SpecWith ()
 testBoolObj = do
@@ -69,8 +71,8 @@ testBoolObj = do
                     , "false"
                     ]
                 expected =
-                    [ [Object.BoolObj True]
-                    , [Object.BoolObj False]
+                    [ Object.BoolObj True
+                    , Object.BoolObj False
                     ]
             map testEval input `shouldBe` expected
         it "evaluation bool" $ do
@@ -86,7 +88,7 @@ testBoolObj = do
                     ]
 
                 (input, expected) = unzip rawInput
-            map testEval input `shouldBe` map ((: []) . Object.BoolObj) expected
+            map testEval input `shouldBe` map Object.BoolObj expected
         it "evaluation Integer" $ do
             let
                 rawInput =
@@ -101,7 +103,7 @@ testBoolObj = do
                     ]
 
                 (input, expected) = unzip rawInput
-            map testEval input `shouldBe` map ((: []) . Object.BoolObj) expected
+            map testEval input `shouldBe` map Object.BoolObj expected
 
 testBangObj :: SpecWith ()
 testBangObj = do
@@ -116,6 +118,62 @@ testBangObj = do
                     , ("!!false", False)
                     , ("!!5", True)
                     ]
-                process = bimap testEval (\c -> [Object.BoolObj c])
+                process = bimap testEval Object.BoolObj
+                (got, expected) = unzip . map process $ lst
+            got `shouldBe` expected
+
+testIfElse :: SpecWith ()
+testIfElse = do
+    describe "TestIfElse" $ do
+        it "all" $ do
+            let
+                lst =
+                    [ ("if (true) { 10 }", Object.IntObj 10)
+                    , ("if (false) { 10 }", Object.Null)
+                    , ("if (1) { 10 }", Object.IntObj 10)
+                    , ("if (1 < 2) { 10 }", Object.IntObj 10)
+                    , ("if (1 > 2) { 10 }", Object.Null)
+                    , ("if (1 > 2) { 10 } else { 20 }", Object.IntObj 20)
+                    , ("if (1 < 2) { 10 } else { 20 }", Object.IntObj 10)
+                    ]
+                process = first testEval
+                (got, expected) = unzip . map process $ lst
+            got `shouldBe` expected
+
+testReturn :: SpecWith ()
+testReturn = do
+    describe "TestReturn" $ do
+        it "overview" $ do
+            let
+                lst =
+                    [ ("return 10;", Object.IntObj 10)
+                    , ("return 10; 9;", Object.IntObj 10)
+                    , ("return 2 * 5; 9;", Object.IntObj 10)
+                    , ("9; return 2 * 5; 9;", Object.IntObj 10)
+                    ]
+                process = first testEval
+                (got, expected) = unzip . map process $ lst
+            got `shouldBe` expected
+        it "blockStatements" $ do
+            let
+                input = "if (10 > 1) { if (10 > 1) { return 10; } return 1; }"
+                expected = Object.IntObj 10
+            testEval input `shouldBe` expected
+
+testErrorHandling :: SpecWith ()
+testErrorHandling = do
+    describe "TestErrorHandling" $ do
+        it "overview" $ do
+            let
+                lst =
+                    [ ("5 + true;", "type mismatch: INTEGER + BOOLEAN")
+                    , ("5 + true; 5;", "type mismatch: INTEGER + BOOLEAN")
+                    , ("-true", "unknown operator: -BOOLEAN")
+                    , ("true + false;", "unknown operator: BOOLEAN + BOOLEAN")
+                    , ("5; true + false; 5", "unknown operator: BOOLEAN + BOOLEAN")
+                    , ("if (10 > 1) { true + false; }", "unknown operator: BOOLEAN + BOOLEAN")
+                    , ("if (10 > 1) { if (10 > 1) { return true + false; } return 1;}", "unknown operator: BOOLEAN + BOOLEAN")
+                    ]
+                process = bimap testEval Object.ErrObj
                 (got, expected) = unzip . map process $ lst
             got `shouldBe` expected
