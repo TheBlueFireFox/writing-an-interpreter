@@ -3,6 +3,7 @@ module EvaluatorSpec (spec) where
 import Test.Hspec
 
 import Data.Bifunctor (Bifunctor (bimap), first)
+import Environment (newEnv)
 import Evaluator (evalProgram)
 import Object qualified
 import Parser (parse)
@@ -15,11 +16,12 @@ spec = do
     testIfElse
     testReturn
     testErrorHandling
+    testLet
 
 testEval :: String -> Object.Object
 testEval input = case parse input of
     Left err -> error $ head err
-    Right prog -> evalProgram prog
+    Right prog -> fst $ evalProgram newEnv prog
 
 testIntegerObj :: SpecWith ()
 testIntegerObj = do
@@ -175,5 +177,26 @@ testErrorHandling = do
                     , ("if (10 > 1) { if (10 > 1) { return true + false; } return 1;}", "unknown operator: BOOLEAN + BOOLEAN")
                     ]
                 process = bimap testEval Object.ErrObj
+                (got, expected) = unzip . map process $ lst
+            got `shouldBe` expected
+        it "identifiers" $ do
+            let
+                lst = [("foobar", "identifier not found: foobar")]
+                process = bimap testEval Object.ErrObj
+                (got, expected) = unzip . map process $ lst
+            got `shouldBe` expected
+
+testLet :: SpecWith ()
+testLet = do
+    describe "TestLetStatement" $ do
+        it "overview" $ do
+            let
+                lst =
+                    [ ("let a = 5; a;", 5)
+                    , ("let a = 5 * 5; a;", 25)
+                    , ("let a = 5; let b = a; b;", 5)
+                    , ("let a = 5; let b = a; let c = a + b + 5; c;", 15)
+                    ]
+                process = bimap testEval Object.IntObj
                 (got, expected) = unzip . map process $ lst
             got `shouldBe` expected

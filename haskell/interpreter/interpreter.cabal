@@ -26,6 +26,7 @@ source-repository head
 library
   exposed-modules:
       Ast
+      Environment
       Evaluator
       Lexer
       Lib
@@ -40,6 +41,7 @@ library
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.7 && <5
+    , unordered-containers
   default-language: GHC2021
 
 executable interpreter-exe
@@ -52,6 +54,7 @@ executable interpreter-exe
   build-depends:
       base >=4.7 && <5
     , interpreter
+    , unordered-containers
   default-language: GHC2021
 
 test-suite interpreter-test
@@ -70,5 +73,6 @@ test-suite interpreter-test
       base >=4.7 && <5
     , hspec ==2.*
     , interpreter
+    , unordered-containers
   default-language: GHC2021
   build-tool-depends: hspec-discover:hspec-discover == 2.*

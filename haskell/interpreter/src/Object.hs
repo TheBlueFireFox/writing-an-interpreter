@@ -1,6 +1,7 @@
 module Object (module Object) where
 
 import Ast (Display (dprint))
+import Data.Bool (bool)
 import Data.Int (Int64)
 
 data Object
@@ -22,6 +23,6 @@ typeObject obj = case obj of
 instance Display Object where
     dprint Null = "null"
     dprint (IntObj v) = show v
-    dprint (BoolObj v) = show v
+    dprint (BoolObj v) = bool "false" "true" v
     dprint (RetObj v) = "return " ++ dprint v
     dprint (ErrObj v) = v
