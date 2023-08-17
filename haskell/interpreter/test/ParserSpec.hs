@@ -12,6 +12,7 @@ spec = do
     testIdentifierExpression
     testIntegerLitteralsExpression
     testBooleanExpression
+    testStringExpressions
     testPrefixExpression
     testInfixExpression
     testOperandPrecedence
@@ -114,6 +115,18 @@ testBooleanExpression =
                 expected =
                     Right . Ast.Program $
                         [ Ast.ExpressionStatement $ Ast.BooleanExpr False
+                        ]
+            parse input `shouldBe` expected
+
+testStringExpressions :: SpecWith ()
+testStringExpressions =
+    describe "TestStringExpressions" $ do
+        it "simple" $ do
+            let
+                input = "\"hello world\";"
+                expected =
+                    Right . Ast.Program $
+                        [ Ast.ExpressionStatement $ Ast.StrExpr "hello world"
                         ]
             parse input `shouldBe` expected
 

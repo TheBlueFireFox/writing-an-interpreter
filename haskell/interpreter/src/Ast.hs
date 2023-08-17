@@ -29,6 +29,7 @@ data Expression
     = IdentExpr String
     | IntegerExpr Int64
     | BooleanExpr Bool
+    | StrExpr String
     | NegExpr Expression
     | NotExpr Expression
     | AddExpr Expression Expression
@@ -63,6 +64,7 @@ instance Display Expression where
     dprint (IntegerExpr lit) = show lit
     dprint (BooleanExpr True) = "true"
     dprint (BooleanExpr False) = "false"
+    dprint (StrExpr lit) = lit
     dprint (NegExpr expr) = showHelperSingle "-" expr
     dprint (NotExpr expr) = showHelperSingle "!" expr
     dprint (AddExpr l r) = showHelperTwo "+" l r

@@ -8,6 +8,7 @@ data TokenType
     | -- Idenfitieres
       Ident String
     | Int Int64
+    | Str String
     | -- Operators
       Assign
     | Plus

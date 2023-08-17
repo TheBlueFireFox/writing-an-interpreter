@@ -269,6 +269,9 @@ testNextTokenComplete =
                 \ }\
                 \ 10 == 10;\
                 \ 10 != 9 ;\
+                \ \"foobar\" \
+                \ \"foo \\\" bar\" \
+                \ \"\\n \\r \\t\" \
                 \"
 
             expected =
@@ -345,6 +348,9 @@ testNextTokenComplete =
                 , NotEq
                 , Int 9
                 , Semicolon
+                , Str "foobar"
+                , Str "foo \" bar"
+                , Str "\n \r \t"
                 , Eof
                 ]
         run input `shouldBe` expected

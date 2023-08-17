@@ -84,6 +84,7 @@ parsePrefixExpression :: [TokenType] -> Either Errors (Expression, [TokenType])
 parsePrefixExpression x = case x of
     (Ident val : cs) -> parseIdent val cs
     (Int val : cs) -> parseInt64 val cs
+    (Str val : cs) -> parseStr val cs
     (KTrue : cs) -> parseBool True cs
     (KFalse : cs) -> parseBool False cs
     (Bang : cs) -> parseNot cs
@@ -151,6 +152,9 @@ parseInt64 val xs = Right (IntegerExpr val, xs)
 
 parseBool :: Bool -> [TokenType] -> Either Errors (Expression, [TokenType])
 parseBool val xs = Right (BooleanExpr val, xs)
+
+parseStr :: String -> [TokenType] -> Either Errors (Expression, [TokenType])
+parseStr val xs = Right (StrExpr val, xs)
 
 parseNot :: [TokenType] -> Either Errors (Expression, [TokenType])
 parseNot xs = first NotExpr <$> parseExpression Prefix xs

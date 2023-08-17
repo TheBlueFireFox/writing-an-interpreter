@@ -44,61 +44,29 @@ evalExpression env expr =
         Ast.IdentExpr v -> evalIdent env v
         Ast.IntegerExpr v -> Object.IntObj v
         Ast.BooleanExpr v -> Object.BoolObj v
+        Ast.StrExpr v -> Object.StrObj v
         Ast.NotExpr v -> evalOne env evalNegPrefix v
         Ast.NegExpr v -> evalOne env evalMinusPrefix v
-        Ast.AddExpr l r -> evalTwoInt env Object.IntObj (+) l r
-        Ast.MinExpr l r -> evalTwoInt env Object.IntObj (-) l r
-        Ast.MulExpr l r -> evalTwoInt env Object.IntObj (*) l r
-        Ast.DivExpr l r -> evalTwoInt env Object.IntObj div l r
-        Ast.LeExpr l r -> evalTwoInt env Object.BoolObj (<) l r
-        Ast.GtExpr l r -> evalTwoInt env Object.BoolObj (>) l r
+        Ast.AddExpr l r -> evalAddExpr env l r
+        Ast.MinExpr l r -> evalTwoInt env Object.IntObj (-) "-" l r
+        Ast.MulExpr l r -> evalTwoInt env Object.IntObj (*) "*" l r
+        Ast.DivExpr l r -> evalTwoInt env Object.IntObj div "/" l r
+        Ast.LeExpr l r -> evalTwoInt env Object.BoolObj (<) "<" l r
+        Ast.GtExpr l r -> evalTwoInt env Object.BoolObj (>) ">" l r
         Ast.EqExpr l r -> evalEqExpr env l r
         Ast.NeqExpr l r -> evalNeqExpr env l r
         Ast.IfExpr cond cons alt -> evalIfExpr env cond cons alt
         Ast.FnExpr params blk -> Object.FnObj params blk env
         Ast.CallExpr fn args -> evalCallExpr fn args env
 
-evalCallExpr :: Ast.Expression -> [Ast.Expression] -> Object.Env -> Object.Object
-evalCallExpr fn args env = case (evalExpression env fn, evalCallArgs env args) of
-    (fn'@(Object.ErrObj _), _) -> fn'
-    (_, [err@(Object.ErrObj _)]) -> err
-    (Object.FnObj params body fnEnv, args') -> applyFn params body fnEnv args'
-    t -> error $ "not a function: " ++ show t
-
-evalCallArgs :: Env.Env Object.Object -> [Ast.Expression] -> [Object.Object]
-evalCallArgs env args =
-    let
-        inner acc [] = reverse acc
-        inner acc (c : cs) = case evalExpression env c of
-            err@(Object.ErrObj _) -> [err]
-            obj -> inner (obj : acc) cs
-     in
-        inner [] args
-
-applyFn :: [Ast.Expression] -> Ast.Statement -> Object.Env -> [Object.Object] -> Object.Object
-applyFn params body fnEnv args = case evalStatement (extendFnEnv params fnEnv args) body of
-    (Object.RetObj v, _) -> v
-    (other, _) -> other
-
-extendFnEnv :: [Ast.Expression] -> Env.Env a -> [a] -> Env.Env a
-extendFnEnv params fnEnv args =
-    let
-        unwrapExpr val = case val of
-            (Ast.IdentExpr ident) -> ident
-            v -> error $ "unexpected parameter expression: " ++ show v
-
-        apply env (param, arg) = Env.setEnv env (unwrapExpr param) arg
-     in
-        foldl apply (Env.newEnclosedEnv fnEnv) (zip params args)
-
-checkOps :: Object.Object -> Object.Object -> Object.Object
-checkOps l r =
+checkOps :: Object.Object -> Object.Object -> [Char] -> Object.Object
+checkOps l r s =
     let
         ls = Object.typeObject l
         rs = Object.typeObject r
         pref = if ls == rs then "unknown operator: " else "type mismatch: "
      in
-        Object.ErrObj $ pref ++ ls ++ " + " ++ rs
+        Object.ErrObj $ pref ++ ls ++ " " ++ s ++ " " ++ rs
 
 evalOne :: Object.Env -> (Object.Object -> b) -> Ast.Expression -> b
 evalOne env fun val = fun $ evalExpression env val
@@ -107,24 +75,31 @@ evalTwoInt ::
     Object.Env ->
     (a -> Object.Object) ->
     (Int64 -> Int64 -> a) ->
+    String ->
     Ast.Expression ->
     Ast.Expression ->
     Object.Object
-evalTwoInt env toObj fun left right = case (evalExpression env left, evalExpression env right) of
+evalTwoInt env toObj fun sFun left right = case (evalExpression env left, evalExpression env right) of
     (Object.IntObj l, Object.IntObj r) -> toObj $ fun l r
-    (l, r) -> checkOps l r
+    (l, r) -> checkOps l r sFun
 
 evalEqExpr :: Object.Env -> Ast.Expression -> Ast.Expression -> Object.Object
 evalEqExpr env left right = case (evalExpression env left, evalExpression env right) of
     (Object.BoolObj l, Object.BoolObj r) -> Object.BoolObj $ l == r
     (Object.IntObj l, Object.IntObj r) -> Object.BoolObj $ l == r
-    (l, r) -> checkOps l r
+    (l, r) -> checkOps l r "=="
+
+evalAddExpr :: Object.Env -> Ast.Expression -> Ast.Expression -> Object.Object
+evalAddExpr env left right = case (evalExpression env left, evalExpression env right) of
+    (Object.IntObj l, Object.IntObj r) -> Object.IntObj $ l + r
+    (Object.StrObj l, Object.StrObj r) -> Object.StrObj $ l ++ r
+    (l, r) -> checkOps l r "+"
 
 evalNeqExpr :: Object.Env -> Ast.Expression -> Ast.Expression -> Object.Object
 evalNeqExpr env left right = case (evalExpression env left, evalExpression env right) of
     (Object.BoolObj l, Object.BoolObj r) -> Object.BoolObj $ l /= r
     (Object.IntObj l, Object.IntObj r) -> Object.BoolObj $ l /= r
-    (l, r) -> checkOps l r
+    (l, r) -> checkOps l r "!="
 
 evalIdent :: Object.Env -> String -> Object.Object
 evalIdent env name =
@@ -160,3 +135,36 @@ evalMinusPrefix :: Object.Object -> Object.Object
 evalMinusPrefix obj = case obj of
     (Object.IntObj v) -> Object.IntObj (negate v)
     c -> Object.ErrObj $ "unknown operator: -" ++ Object.typeObject c
+
+evalCallExpr :: Ast.Expression -> [Ast.Expression] -> Object.Env -> Object.Object
+evalCallExpr fn args env = case (evalExpression env fn, evalCallArgs env args) of
+    (fn'@(Object.ErrObj _), _) -> fn'
+    (_, [err@(Object.ErrObj _)]) -> err
+    (Object.FnObj params body fnEnv, args') -> applyFn params body fnEnv args'
+    t -> error $ "not a function: " ++ show t
+
+evalCallArgs :: Env.Env Object.Object -> [Ast.Expression] -> [Object.Object]
+evalCallArgs env args =
+    let
+        inner acc [] = reverse acc
+        inner acc (c : cs) = case evalExpression env c of
+            err@(Object.ErrObj _) -> [err]
+            obj -> inner (obj : acc) cs
+     in
+        inner [] args
+
+applyFn :: [Ast.Expression] -> Ast.Statement -> Object.Env -> [Object.Object] -> Object.Object
+applyFn params body fnEnv args = case evalStatement (extendFnEnv params fnEnv args) body of
+    (Object.RetObj v, _) -> v
+    (other, _) -> other
+
+extendFnEnv :: [Ast.Expression] -> Env.Env a -> [a] -> Env.Env a
+extendFnEnv params fnEnv args =
+    let
+        unwrapExpr val = case val of
+            (Ast.IdentExpr ident) -> ident
+            v -> error $ "unexpected parameter expression: " ++ show v
+
+        apply env (param, arg) = Env.setEnv env (unwrapExpr param) arg
+     in
+        foldl apply (Env.newEnclosedEnv fnEnv) (zip params args)

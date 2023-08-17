@@ -13,6 +13,7 @@ spec :: Spec
 spec = do
     testIntegerObj
     testBoolObj
+    testStrObj
     testBangObj
     testIfElse
     testReturn
@@ -109,6 +110,20 @@ testBoolObj = do
                 (input, expected) = unzip rawInput
             map testEval input `shouldBe` map Object.BoolObj expected
 
+testStrObj :: SpecWith ()
+testStrObj =
+    describe "TestStrObj" $ do
+        it "simple Hello World!" $ do
+            let
+                input = "\"Hello World!\""
+                expected = Object.StrObj "Hello World!"
+            testEval input `shouldBe` expected
+        it "concatination" $ do
+            let
+                input = "\"Hello\" + \" \" + \"World!\""
+                expected = Object.StrObj "Hello World!"
+            testEval input `shouldBe` expected
+
 testBangObj :: SpecWith ()
 testBangObj = do
     describe "TestBangObj" $ do
@@ -173,6 +188,7 @@ testErrorHandling = do
                     [ ("5 + true;", "type mismatch: INTEGER + BOOLEAN")
                     , ("5 + true; 5;", "type mismatch: INTEGER + BOOLEAN")
                     , ("-true", "unknown operator: -BOOLEAN")
+                    , ("\"Hello\" - \"World\"", "unknown operator: STRING - STRING")
                     , ("true + false;", "unknown operator: BOOLEAN + BOOLEAN")
                     , ("5; true + false; 5", "unknown operator: BOOLEAN + BOOLEAN")
                     , ("if (10 > 1) { true + false; }", "unknown operator: BOOLEAN + BOOLEAN")
@@ -229,8 +245,8 @@ testFun = do
                 process = bimap testEval Object.IntObj
                 (got, expected) = unzip . map process $ lst
             got `shouldBe` expected
-        it "closures" $ do 
-            let 
+        it "closures" $ do
+            let
                 input = "let newAdder = fn(x) { fn(y) { x + y }; }; let addTwo = newAdder(2); addTwo(2)"
                 expected = Object.IntObj 4
             testEval input `shouldBe` expected

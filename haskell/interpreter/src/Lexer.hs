@@ -35,7 +35,7 @@ nextToken l@(Lexer input) =
             [] -> Just (Eof, 0)
             _ -> Nothing
 
-        parseClean v = endOfFile v <|> parserSymbols v <|> keywords v <|> readIdentifier v <|> readInteger v <|> Just (Illegal v, 0)
+        parseClean v = endOfFile v <|> parserSymbols v <|> keywords v <|> readIdentifier v <|> readInteger v <|> readString v <|> Just (Illegal v, 0)
 
         parser v len = second (+ len) <$> parseClean v
 
@@ -75,6 +75,22 @@ readIdentifier = readBlock isLetter Ident
 
 readInteger :: String -> Maybe (TokenType, Int)
 readInteger = readBlock isDigit (Int . read)
+
+readString :: String -> Maybe (TokenType, Int)
+readString v =
+    let
+        inner _ _ [] = Nothing
+        inner acc count ('"' : _) = Just (Str (reverse acc), count + 1)
+        inner acc count ('\\' : '"' : cs) = inner ('"' : acc) (count + 2) cs
+        inner acc count ('\\' : 'n' : cs) = inner ('\n' : acc) (count + 2) cs
+        inner acc count ('\\' : 'r' : cs) = inner ('\r' : acc) (count + 2) cs
+        inner acc count ('\\' : 't' : cs) = inner ('\t' : acc) (count + 2) cs
+        inner acc count (curr : cs) = inner (curr : acc) (count + 1) cs
+
+        outer ('"' : c) = inner [] 1 c
+        outer _ = Nothing
+     in
+        outer v
 
 parserSymbols :: String -> Maybe (TokenType, Int)
 parserSymbols x = case x of
