@@ -8,6 +8,16 @@ import Environment qualified
 
 type Env = Environment.Env Object
 
+newtype BuildInFunction = BuildInFunction ([Object.Object] -> Object.Object)
+
+-- We don't care about this here
+instance Show BuildInFunction where
+    show _ = "BUILTIN"
+
+-- We don't really care about this
+instance Eq BuildInFunction where
+    (==) _ _ = True
+
 data Object
     = Null
     | IntObj Int64
@@ -15,6 +25,7 @@ data Object
     | StrObj String
     | RetObj Object
     | FnObj [Expression] Statement Env -- Params Body Env
+    | BuiObj BuildInFunction -- Fn
     | ErrObj String
     deriving (Show, Eq)
 
@@ -26,6 +37,7 @@ typeObject obj = case obj of
     StrObj _ -> "STRING"
     RetObj _ -> "RETURN"
     ErrObj _ -> "ERROR"
+    BuiObj _ -> "BUILTIN"
     FnObj{} -> "FN"
 
 instance Display Object where
@@ -35,4 +47,5 @@ instance Display Object where
     dprint (StrObj v) = v
     dprint (RetObj v) = "return " ++ dprint v
     dprint (ErrObj v) = "ERROR: " ++ v
+    dprint (BuiObj _) = "builtin function"
     dprint (FnObj params expr _) = "fn(" ++ intercalate ", " (map dprint params) ++ ")" ++ "{\n" ++ dprint expr ++ "\n}"

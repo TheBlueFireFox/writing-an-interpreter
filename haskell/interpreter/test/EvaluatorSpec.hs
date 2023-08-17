@@ -20,6 +20,7 @@ spec = do
     testErrorHandling
     testLet
     testFun
+    testBuildIns
 
 testEval :: String -> Object.Object
 testEval input = case parse input of
@@ -250,3 +251,19 @@ testFun = do
                 input = "let newAdder = fn(x) { fn(y) { x + y }; }; let addTwo = newAdder(2); addTwo(2)"
                 expected = Object.IntObj 4
             testEval input `shouldBe` expected
+
+testBuildIns :: SpecWith ()
+testBuildIns =
+    describe "TestBuildIns" $ do
+        it "len" $ do
+            let
+                lst =
+                    [ ("len(\"\")", Object.IntObj 0)
+                    , ("len(\"four\")", Object.IntObj 4)
+                    , ("len(\"hello world\")", Object.IntObj 11)
+                    , ("len(1)", Object.ErrObj "argument to \"len\" not supported, got INTEGER")
+                    , ("len(\"one\", \"two\")", Object.ErrObj "wrong number of arguments. got=2, want=1")
+                    ]
+                process = first testEval
+                (got, expected) = unzip . map process $ lst
+            got `shouldBe` expected

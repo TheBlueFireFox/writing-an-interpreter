@@ -1,6 +1,8 @@
 module Evaluator (evalProgram) where
 
+import Ast (Display (dprint))
 import Ast qualified
+import Buildin qualified
 import Data.Int (Int64)
 import Data.Maybe (fromMaybe)
 import Environment qualified as Env
@@ -105,8 +107,9 @@ evalIdent :: Object.Env -> String -> Object.Object
 evalIdent env name =
     let
         fallback = Object.ErrObj $ "identifier not found: " ++ name
+        env' = Env.makeRoot Buildin.parentEnv env
      in
-        fromMaybe fallback $ Env.getEnv env name
+        fromMaybe fallback $ Env.getEnv env' name
 
 evalIfExpr ::
     Object.Env ->
@@ -141,7 +144,8 @@ evalCallExpr fn args env = case (evalExpression env fn, evalCallArgs env args) o
     (fn'@(Object.ErrObj _), _) -> fn'
     (_, [err@(Object.ErrObj _)]) -> err
     (Object.FnObj params body fnEnv, args') -> applyFn params body fnEnv args'
-    t -> error $ "not a function: " ++ show t
+    (Object.BuiObj (Object.BuildInFunction fn'), args') -> fn' args'
+    (l, _) -> error $ "not a function: " ++ dprint l
 
 evalCallArgs :: Env.Env Object.Object -> [Ast.Expression] -> [Object.Object]
 evalCallArgs env args =
