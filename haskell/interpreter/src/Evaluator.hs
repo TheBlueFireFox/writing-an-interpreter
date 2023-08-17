@@ -1,15 +1,15 @@
 module Evaluator (evalProgram) where
 
 import Ast qualified
+import Data.Int (Int64)
 import Data.Maybe (fromMaybe)
 import Environment qualified as Env
-import GHC.Int qualified
 import Object qualified
 
-evalProgram :: Env.Env -> Ast.Program -> (Object.Object, Env.Env)
+evalProgram :: Object.Env -> Ast.Program -> (Object.Object, Object.Env)
 evalProgram env (Ast.Program statements) =
     let
-        inner :: Env.Env -> Object.Object -> [Ast.Statement] -> (Object.Object, Env.Env)
+        inner :: Object.Env -> Object.Object -> [Ast.Statement] -> (Object.Object, Object.Env)
         inner env' lst [] = (lst, env')
         inner env' _ (curr : cs) =
             case evalStatement env' curr of
@@ -19,14 +19,14 @@ evalProgram env (Ast.Program statements) =
      in
         inner env Object.Null statements
 
-evalStatement :: Env.Env -> Ast.Statement -> (Object.Object, Env.Env)
+evalStatement :: Object.Env -> Ast.Statement -> (Object.Object, Object.Env)
 evalStatement env statement = case statement of
     Ast.LetStatement ident expr -> (Object.Null, Env.setEnv env ident $ evalExpression env expr)
     Ast.ReturnStatement expr -> (Object.RetObj $ evalExpression env expr, env)
     Ast.ExpressionStatement expr -> (evalExpression env expr, env)
     Ast.BlockStatement statements -> (evalBlockStatement env statements, env)
 
-evalBlockStatement :: Env.Env -> [Ast.Statement] -> Object.Object
+evalBlockStatement :: Object.Env -> [Ast.Statement] -> Object.Object
 evalBlockStatement env statements =
     let
         inner _ acc [] = acc
@@ -38,7 +38,7 @@ evalBlockStatement env statements =
      in
         inner env Object.Null statements
 
-evalExpression :: Env.Env -> Ast.Expression -> Object.Object
+evalExpression :: Object.Env -> Ast.Expression -> Object.Object
 evalExpression env expr =
     case expr of
         Ast.IdentExpr v -> evalIdent env v
@@ -55,7 +55,41 @@ evalExpression env expr =
         Ast.EqExpr l r -> evalEqExpr env l r
         Ast.NeqExpr l r -> evalNeqExpr env l r
         Ast.IfExpr cond cons alt -> evalIfExpr env cond cons alt
-        expr' -> error . show $ expr'
+        Ast.FnExpr params blk -> Object.FnObj params blk env
+        Ast.CallExpr fn args -> evalCallExpr fn args env
+
+evalCallExpr :: Ast.Expression -> [Ast.Expression] -> Object.Env -> Object.Object
+evalCallExpr fn args env = case (evalExpression env fn, evalCallArgs env args) of
+    (fn'@(Object.ErrObj _), _) -> fn'
+    (_, [err@(Object.ErrObj _)]) -> err
+    (Object.FnObj params body fnEnv, args') -> applyFn params body fnEnv args'
+    t -> error $ "not a function: " ++ show t
+
+evalCallArgs :: Env.Env Object.Object -> [Ast.Expression] -> [Object.Object]
+evalCallArgs env args =
+    let
+        inner acc [] = reverse acc
+        inner acc (c : cs) = case evalExpression env c of
+            err@(Object.ErrObj _) -> [err]
+            obj -> inner (obj : acc) cs
+     in
+        inner [] args
+
+applyFn :: [Ast.Expression] -> Ast.Statement -> Object.Env -> [Object.Object] -> Object.Object
+applyFn params body fnEnv args = case evalStatement (extendFnEnv params fnEnv args) body of
+    (Object.RetObj v, _) -> v
+    (other, _) -> other
+
+extendFnEnv :: [Ast.Expression] -> Env.Env a -> [a] -> Env.Env a
+extendFnEnv params fnEnv args =
+    let
+        unwrapExpr val = case val of
+            (Ast.IdentExpr ident) -> ident
+            v -> error $ "unexpected parameter expression: " ++ show v
+
+        apply env (param, arg) = Env.setEnv env (unwrapExpr param) arg
+     in
+        foldl apply (Env.newEnclosedEnv fnEnv) (zip params args)
 
 checkOps :: Object.Object -> Object.Object -> Object.Object
 checkOps l r =
@@ -66,13 +100,13 @@ checkOps l r =
      in
         Object.ErrObj $ pref ++ ls ++ " + " ++ rs
 
-evalOne :: Env.Env -> (Object.Object -> b) -> Ast.Expression -> b
+evalOne :: Object.Env -> (Object.Object -> b) -> Ast.Expression -> b
 evalOne env fun val = fun $ evalExpression env val
 
 evalTwoInt ::
-    Env.Env ->
+    Object.Env ->
     (a -> Object.Object) ->
-    (GHC.Int.Int64 -> GHC.Int.Int64 -> a) ->
+    (Int64 -> Int64 -> a) ->
     Ast.Expression ->
     Ast.Expression ->
     Object.Object
@@ -80,19 +114,19 @@ evalTwoInt env toObj fun left right = case (evalExpression env left, evalExpress
     (Object.IntObj l, Object.IntObj r) -> toObj $ fun l r
     (l, r) -> checkOps l r
 
-evalEqExpr :: Env.Env -> Ast.Expression -> Ast.Expression -> Object.Object
+evalEqExpr :: Object.Env -> Ast.Expression -> Ast.Expression -> Object.Object
 evalEqExpr env left right = case (evalExpression env left, evalExpression env right) of
     (Object.BoolObj l, Object.BoolObj r) -> Object.BoolObj $ l == r
     (Object.IntObj l, Object.IntObj r) -> Object.BoolObj $ l == r
     (l, r) -> checkOps l r
 
-evalNeqExpr :: Env.Env -> Ast.Expression -> Ast.Expression -> Object.Object
+evalNeqExpr :: Object.Env -> Ast.Expression -> Ast.Expression -> Object.Object
 evalNeqExpr env left right = case (evalExpression env left, evalExpression env right) of
     (Object.BoolObj l, Object.BoolObj r) -> Object.BoolObj $ l /= r
     (Object.IntObj l, Object.IntObj r) -> Object.BoolObj $ l /= r
     (l, r) -> checkOps l r
 
-evalIdent :: Env.Env -> String -> Object.Object
+evalIdent :: Object.Env -> String -> Object.Object
 evalIdent env name =
     let
         fallback = Object.ErrObj $ "identifier not found: " ++ name
@@ -100,7 +134,7 @@ evalIdent env name =
         fromMaybe fallback $ Env.getEnv env name
 
 evalIfExpr ::
-    Env.Env ->
+    Object.Env ->
     Ast.Expression ->
     Ast.Statement ->
     Maybe Ast.Statement ->

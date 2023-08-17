@@ -1,4 +1,3 @@
-
 module Repl (runner) where
 
 import GHC.IO.Handle (hFlush)
@@ -29,12 +28,12 @@ runner = do
     putStrLn "Feel free to type in commands"
     replLoop Env.newEnv
 
-eval :: Env.Env -> String -> (Object.Object, Env.Env)
+eval :: Object.Env -> String -> (Object.Object, Object.Env)
 eval env input = case parse input of
     Left err -> error $ "There was an error : " ++ head err
     Right prog -> evalProgram env prog
 
-replLoop :: Env.Env -> IO ()
+replLoop :: Object.Env -> IO ()
 replLoop env =
     do
         printPromt
@@ -43,14 +42,14 @@ replLoop env =
             then putStrLn "\nBye!"
             else process env
 
-process :: Env.Env -> IO ()
+process :: Object.Env -> IO ()
 process env = do
     line <- getLine
     if line == "\n"
         then replLoop env
         else innerProcess env line
 
-innerProcess :: Env.Env -> String -> IO ()
+innerProcess :: Object.Env -> String -> IO ()
 innerProcess oenv line = do
     let
         (obj, env) = eval oenv line

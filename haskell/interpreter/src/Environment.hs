@@ -1,18 +1,22 @@
-module Environment (Env, newEnv, getEnv, setEnv) where
+module Environment (Env, newEnv, getEnv, setEnv, newEnclosedEnv) where
 
 import Data.HashMap.Strict (HashMap, empty, insert, (!?))
-import Object qualified
+import GHC.Base (Alternative ((<|>)))
 
-newtype Env = Env
-    { store :: HashMap String Object.Object
+data Env a = Env
+    { store :: HashMap String a
+    , parent :: Maybe (Env a)
     }
     deriving (Show, Eq)
 
-newEnv :: Env
-newEnv = Env{store = empty}
+newEnv :: Env a
+newEnv = Env{store = empty, parent = Nothing}
 
-getEnv :: Env -> String -> Maybe Object.Object
-getEnv (Env store) name = store !? name
+newEnclosedEnv :: Env a -> Env a
+newEnclosedEnv parent = Env{store = empty, parent = Just parent}
 
-setEnv :: Env -> String -> Object.Object -> Env
-setEnv (Env store) name obj = Env{ store = insert name obj store }
+getEnv :: Env a -> String -> Maybe a
+getEnv (Env store parent) name = (store !? name) <|> ((`getEnv` name) =<< parent)
+
+setEnv :: Env a -> String -> a -> Env a
+setEnv (Env store parent) name obj = Env{store = insert name obj store, parent}

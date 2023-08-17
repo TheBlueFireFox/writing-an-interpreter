@@ -2,6 +2,7 @@ module EvaluatorSpec (spec) where
 
 import Test.Hspec
 
+import Ast (Expression (..), Statement (..))
 import Data.Bifunctor (Bifunctor (bimap), first)
 import Environment (newEnv)
 import Evaluator (evalProgram)
@@ -17,6 +18,7 @@ spec = do
     testReturn
     testErrorHandling
     testLet
+    testFun
 
 testEval :: String -> Object.Object
 testEval input = case parse input of
@@ -200,3 +202,35 @@ testLet = do
                 process = bimap testEval Object.IntObj
                 (got, expected) = unzip . map process $ lst
             got `shouldBe` expected
+
+testFun :: SpecWith ()
+testFun = do
+    describe "TestFunctionStatement" $ do
+        it "simple" $ do
+            let
+                input = "fn(x) { x + 2; };"
+                blk =
+                    [ ExpressionStatement
+                        ( AddExpr (IdentExpr "x") (IntegerExpr 2)
+                        )
+                    ]
+                expected = Object.FnObj [IdentExpr "x"] (BlockStatement blk) Environment.newEnv
+            testEval input `shouldBe` expected
+        it "overview" $ do
+            let
+                lst =
+                    [ ("let identity = fn(x) { x; }; identity(5);", 5)
+                    , ("let identity = fn(x) { return x; }; identity(5);", 5)
+                    , ("let double = fn(x) { x * 2; }; double(5);", 10)
+                    , ("let add = fn(x, y) { x + y; }; add(5, 5);", 10)
+                    , ("let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));", 20)
+                    , ("fn(x) { x; }(5)", 5)
+                    ]
+                process = bimap testEval Object.IntObj
+                (got, expected) = unzip . map process $ lst
+            got `shouldBe` expected
+        it "closures" $ do 
+            let 
+                input = "let newAdder = fn(x) { fn(y) { x + y }; }; let addTwo = newAdder(2); addTwo(2)"
+                expected = Object.IntObj 4
+            testEval input `shouldBe` expected
