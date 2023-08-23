@@ -272,6 +272,7 @@ testNextTokenComplete =
                 \ \"foobar\" \
                 \ \"foo \\\" bar\" \
                 \ \"\\n \\r \\t\" \
+                \ [1, 2]; \
                 \"
 
             expected =
@@ -351,6 +352,12 @@ testNextTokenComplete =
                 , Str "foobar"
                 , Str "foo \" bar"
                 , Str "\n \r \t"
+                , LBracket
+                , Int 1
+                , Comma
+                , Int 2
+                , RBracket
+                , Semicolon
                 , Eof
                 ]
         run input `shouldBe` expected

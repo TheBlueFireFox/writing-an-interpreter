@@ -8,7 +8,7 @@ import Environment qualified
 
 type Env = Environment.Env Object
 
-newtype BuildInFunction = BuildInFunction ([Object.Object] -> Object.Object)
+type BuildInFunction = [Object.Object] -> Object.Object
 
 -- We don't care about this here
 instance Show BuildInFunction where
@@ -23,6 +23,7 @@ data Object
     | IntObj Int64
     | BoolObj Bool
     | StrObj String
+    | ArrObj [Object]
     | RetObj Object
     | FnObj [Expression] Statement Env -- Params Body Env
     | BuiObj BuildInFunction -- Fn
@@ -35,6 +36,7 @@ typeObject obj = case obj of
     IntObj _ -> "INTEGER"
     BoolObj _ -> "BOOLEAN"
     StrObj _ -> "STRING"
+    ArrObj _ -> "ARRAY"
     RetObj _ -> "RETURN"
     ErrObj _ -> "ERROR"
     BuiObj _ -> "BUILTIN"
@@ -48,4 +50,5 @@ instance Display Object where
     dprint (RetObj v) = "return " ++ dprint v
     dprint (ErrObj v) = "ERROR: " ++ v
     dprint (BuiObj _) = "builtin function"
+    dprint (ArrObj arr) = "[" ++ intercalate ", " (map dprint arr) ++ "]"
     dprint (FnObj params expr _) = "fn(" ++ intercalate ", " (map dprint params) ++ ")" ++ "{\n" ++ dprint expr ++ "\n}"

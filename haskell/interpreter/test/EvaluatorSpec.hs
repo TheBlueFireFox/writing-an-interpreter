@@ -21,6 +21,8 @@ spec = do
     testLet
     testFun
     testBuildIns
+    testArray
+    testDrivingArrays
 
 testEval :: String -> Object.Object
 testEval input = case parse input of
@@ -160,6 +162,40 @@ testIfElse = do
                 (got, expected) = unzip . map process $ lst
             got `shouldBe` expected
 
+testArray :: SpecWith ()
+testArray = do
+    describe "TestArray" $ do
+        it "overview" $ do
+            let
+                input = "[1, 2 * 2, 3 + 3]"
+                expected =
+                    Object.ArrObj
+                        [ Object.IntObj v | v <- [1, 4, 6]
+                        ]
+            testEval input `shouldBe` expected
+        it "index expressions" $ do
+            let
+                lst =
+                    [ ("[1, 2, 3][0]", Object.IntObj 1)
+                    , ("[1, 2, 3][1]", Object.IntObj 2)
+                    , ("[1, 2, 3][2]", Object.IntObj 3)
+                    , ("let i = 0; [1][i];", Object.IntObj 1)
+                    , ("[1, 2, 3][1 + 1];", Object.IntObj 3)
+                    , ("let myArray = [1, 2, 3]; myArray[2];", Object.IntObj 3)
+                    , ("let myArray = [1, 2, 3]; let i = myArray[0]; myArray[i]", Object.IntObj 2)
+                    , ("[1, 2, 3][3]", Object.Null)
+                    , ("[1, 2, 3][-1]", Object.Null)
+                    ]
+                process = first testEval
+                (got, expected) = unzip . map process $ lst
+            got `shouldBe` expected
+        it "index expressions with math" $ do
+            let
+                -- this test createed problems so here I am testing only it
+                got = testEval "let myArray = [1, 2, 3]; myArray[0] + myArray[1] + myArray[2];"
+                expected = Object.IntObj 6
+            got `shouldBe` expected
+
 testReturn :: SpecWith ()
 testReturn = do
     describe "TestReturn" $ do
@@ -266,4 +302,77 @@ testBuildIns =
                     ]
                 process = first testEval
                 (got, expected) = unzip . map process $ lst
+            got `shouldBe` expected
+
+testDrivingArrays :: SpecWith ()
+testDrivingArrays =
+    describe "TestDrivingArrays" $ do
+        it "map -- simple" $ do
+            let
+                inputMap =
+                    "\
+                    \let iter = fn(i) {                                 \
+                    \   if(i > 0) {                                     \
+                    \       iter(i - 1);                                \
+                    \   } else {                                        \
+                    \        42;                                        \
+                    \   }                                               \
+                    \ };                                                \
+                    \"
+                inputExpr = "iter(2);"
+                input = inputMap ++ inputExpr
+
+                expected = Object.IntObj 42
+                got = testEval input
+            got `shouldBe` expected
+        it "map -- function in function" $ do
+            let
+                inputMap =
+                    "\
+                    \let map = fn(arr, f) {                                         \
+                    \   let iter = fn(arr, accumulated) {                           \
+                    \       if (len(arr) == 0) {                                    \
+                    \          accumulated                                          \
+                    \       } else {                                                \
+                    \          iter(rest(arr), push(accumulated, f(first(arr))));   \
+                    \       }                                                       \
+                    \   };                                                          \
+                    \   iter(arr, []);                                              \
+                    \ };                                                            \
+                    \"
+                inputArr = "let a = [1, 2, 3, 4];"
+                inputDouble = "let double = fn(x) { x * 2 };"
+                inputExpr = "map(a, double);"
+                input = inputMap ++ inputArr ++ inputDouble ++ inputExpr
+
+                expected = Object.ArrObj $ [Object.IntObj v | v <- [2, 4, 6, 8]]
+                got = testEval input
+            got `shouldBe` expected
+        it "reduce" $ do
+            let
+                reduceFn =
+                    " \
+                    \let reduce = fn(arr, initial, f) {                             \
+                    \    let iter = fn(arr, result) {                               \
+                    \        if (len(arr) == 0) {                                   \
+                    \            result                                             \
+                    \        } else {                                               \
+                    \            iter(rest(arr), f(result, first(arr)));            \
+                    \        }                                                      \
+                    \    };                                                         \
+                    \    iter(arr, initial);                                        \
+                    \};                                                             \
+                    \"
+                sumFn =
+                    "\
+                    \ let sum = fn(arr) {                                            \
+                    \     reduce(arr, 0, fn(initial, el) {                           \
+                    \         initial + el                                           \
+                    \     });                                                        \
+                    \ };                                                             \
+                    \"
+                arr = "sum([1, 2, 3, 4, 5]);"
+                input = reduceFn ++ sumFn ++ arr
+                expected = Object.IntObj 15
+                got = testEval input
             got `shouldBe` expected

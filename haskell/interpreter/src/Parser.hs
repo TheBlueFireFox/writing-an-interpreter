@@ -18,6 +18,7 @@ data Predecence
     | Product
     | Prefix
     | Call
+    | Index
     deriving (Enum, Eq, Ord)
 
 mapPredecence :: TokenType -> Predecence
@@ -32,6 +33,7 @@ mapPredecence xs =
         Slash -> Product
         Asterisk -> Product
         LParen -> Call
+        LBracket -> Index
         _ -> Lowest
 
 parse :: String -> Either Errors Program
@@ -90,10 +92,28 @@ parsePrefixExpression x = case x of
     (Bang : cs) -> parseNot cs
     (Minus : cs) -> parseNegative cs
     (LParen : cs) -> parseGrouped cs
+    (LBracket : cs) -> parseArray cs
     (If : cs) -> parseIf cs
     (Function : cs) -> parseFnLit cs
     (c : _) -> Left ["Is not a prefix type " ++ show c]
     [] -> Left ["Emptry token list"]
+
+parseExprList :: TokenType -> [TokenType] -> Either Errors ([Expression], [TokenType])
+parseExprList stop toks =
+    let
+        parseNextExpr = parseExpression Lowest
+
+        loop acc toks'
+            | head toks' == Comma = uncurry loop . first (: acc) =<< parseNextExpr (tail toks')
+            | head toks' == stop = Right (reverse acc, tail toks')
+            | otherwise = Left ["unsupported token " ++ show toks' ++ " in call expression"]
+
+        preCond toks'
+            | head toks' == stop = Right ([], tail toks')
+            -- loop
+            | otherwise = uncurry loop . first (: []) =<< parseNextExpr toks'
+     in
+        preCond toks
 
 parseInfixExpression :: Predecence -> Expression -> [TokenType] -> Either Errors (Expression, [TokenType])
 parseInfixExpression _ left [] = Right (left, [])
@@ -102,7 +122,8 @@ parseInfixExpression pre left toks@(tok : xs)
     | pre >= mapPredecence tok = Right (left, toks)
     | otherwise =
         let
-            runner p = uncurry (parseInfixExpression pre) =<< parseInfix (p left) tok xs
+            runner_inner = uncurry (parseInfixExpression pre)
+            runner p = runner_inner =<< parseInfix (p left) tok xs
          in
             case tok of
                 Plus -> runner AddExpr
@@ -113,28 +134,28 @@ parseInfixExpression pre left toks@(tok : xs)
                 NotEq -> runner NeqExpr
                 Lt -> runner LeExpr
                 Gt -> runner GtExpr
-                LParen -> parseCallExpression left xs
+                LParen -> runner_inner =<< parseCallExpression left xs
+                LBracket -> runner_inner =<< parseIndexExpression left xs
                 _ -> Right (left, toks)
+
+parseArray :: [TokenType] -> Either Errors (Expression, [TokenType])
+parseArray toks = first ArrExpr <$> parseExprList RBracket toks
+
+parseIndexExpression :: Expression -> [TokenType] -> Either [String] (Expression, [TokenType])
+parseIndexExpression left toks =
+    let
+        inner v = case v of
+            Right (expr, RBracket : xs) -> Right (IndExpr left expr, xs)
+            Right _ -> Left ["Missing RBracket"]
+            err -> err
+     in
+        inner $ parseExpression Lowest toks
 
 parseExpression :: Predecence -> [TokenType] -> Either Errors (Expression, [TokenType])
 parseExpression pre xs = uncurry (parseInfixExpression pre) =<< parsePrefixExpression xs
 
 parseCallExpression :: Expression -> [TokenType] -> Either Errors (Expression, [TokenType])
-parseCallExpression left toks =
-    let
-        parseNextExpr = parseExpression Lowest
-
-        helperInner acc toks'
-            | head toks' == Comma = uncurry helperInner . first (: acc) =<< parseNextExpr (tail toks')
-            | head toks' == RParen = Right (reverse acc, tail toks')
-            | otherwise = Left ["unsupported token " ++ show toks' ++ " in call expression"]
-
-        helperOuter toks'
-            | head toks' == RParen = Right ([], tail toks')
-            -- loop
-            | otherwise = uncurry helperInner . first (: []) =<< parseNextExpr toks'
-     in
-        first (CallExpr left) <$> helperOuter toks
+parseCallExpression left toks = first (CallExpr left) <$> parseExprList RParen toks
 
 parseGrouped :: [TokenType] -> Either Errors (Expression, [TokenType])
 parseGrouped xs =

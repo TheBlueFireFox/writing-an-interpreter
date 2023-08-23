@@ -40,6 +40,8 @@ data Expression
     | EqExpr Expression Expression
     | GtExpr Expression Expression
     | LeExpr Expression Expression
+    | IndExpr Expression Expression -- Object Index
+    | ArrExpr [Expression] -- Elements
     | IfExpr Expression Statement (Maybe Statement) -- Condition BlockStatement BlockStatement
     | FnExpr [Expression] Statement -- Params BlockStatement
     | CallExpr Expression [Expression] -- Function Arguments
@@ -75,6 +77,8 @@ instance Display Expression where
     dprint (EqExpr l r) = showHelperTwo "==" l r
     dprint (GtExpr l r) = showHelperTwo ">" l r
     dprint (LeExpr l r) = showHelperTwo "<" l r
+    dprint (IndExpr obj ind) = "(" ++ dprint obj ++ "[" ++ dprint ind ++ "])"
+    dprint (ArrExpr arr) = "[" ++ intercalate ", " (map dprint arr) ++ "]"
     dprint (IfExpr cond cons alt) = showHelperIf cond cons alt
     dprint (FnExpr param blk) = "fun (" ++ intercalate ", " (map dprint param) ++ ")" ++ dprint blk
     dprint (CallExpr fn param) = dprint fn ++ "(" ++ intercalate ", " (map dprint param) ++ ")"

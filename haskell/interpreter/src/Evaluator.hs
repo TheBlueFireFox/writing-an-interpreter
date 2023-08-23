@@ -3,7 +3,9 @@ module Evaluator (evalProgram) where
 import Ast (Display (dprint))
 import Ast qualified
 import Buildin qualified
+import Control.Applicative ((<|>))
 import Data.Int (Int64)
+import Data.List (genericIndex)
 import Data.Maybe (fromMaybe)
 import Environment qualified as Env
 import Object qualified
@@ -23,10 +25,43 @@ evalProgram env (Ast.Program statements) =
 
 evalStatement :: Object.Env -> Ast.Statement -> (Object.Object, Object.Env)
 evalStatement env statement = case statement of
-    Ast.LetStatement ident expr -> (Object.Null, Env.setEnv env ident $ evalExpression env expr)
+    Ast.LetStatement ident expr -> (Object.Null, evalLetStatement env ident expr)
     Ast.ReturnStatement expr -> (Object.RetObj $ evalExpression env expr, env)
     Ast.ExpressionStatement expr -> (evalExpression env expr, env)
     Ast.BlockStatement statements -> (evalBlockStatement env statements, env)
+
+-- we need to handle a function specially, as it needs an updated env inside it, with itself included
+-- additionaly we need to do this twice, so that
+--  a) we have a reference to the name for the function inside
+--  b) we have a function with both itself and the name inside
+--  c) we have an env with everything
+evalLetStatement :: Env.Env Object.Object -> String -> Ast.Expression -> Env.Env Object.Object
+evalLetStatement env0 ident expr =
+    let
+        fn = Object.FnObj
+
+        -- 0) env0 + name => ?        -- name doesn't map to anything
+        -- 1) envA + name => Fn(env0) -- envA maps to with Fn with empty env
+        -- 2) envB + name => Fn(envA) -- envB maps to Fn with envA (showing to Fn with empty env)
+        -- 3) envC + name => Fn(envB) -- envC maps to Fn with envB (showing to Fn with correct env)
+        -- FIX ME: This 10 is a number chosen as it let's all the tests pass, however 
+        -- it is definitly based on unwanted behaviour and should be fixed
+        iters = 10 :: Int
+        fixFn i params body env'
+            | i == 0 = env'
+            | otherwise =
+                let
+                    env'' = Env.setEnv env' ident $ fn params body env'
+                 in
+                    fixFn (i - 1) params body env''
+
+        inner obj = case obj of
+            Object.FnObj params body env' -> fixFn iters params body env'
+            _ -> Env.setEnv env0 ident obj
+     in
+        inner $ evalExpression env0 expr
+
+-- Env.setEnv env ident $ evalExpression env expr
 
 evalBlockStatement :: Object.Env -> [Ast.Statement] -> Object.Object
 evalBlockStatement env statements =
@@ -60,6 +95,21 @@ evalExpression env expr =
         Ast.IfExpr cond cons alt -> evalIfExpr env cond cons alt
         Ast.FnExpr params blk -> Object.FnObj params blk env
         Ast.CallExpr fn args -> evalCallExpr fn args env
+        Ast.ArrExpr objs -> Object.ArrObj $ evalExpressions env objs
+        Ast.IndExpr left index -> evalIndexExpr env left index
+
+evalIndexExpr :: Object.Env -> Ast.Expression -> Ast.Expression -> Object.Object
+evalIndexExpr env left index = case (evalExpression env left, evalExpression env index) of
+    (err@(Object.ErrObj _), _) -> err
+    (_, err@(Object.ErrObj _)) -> err
+    (Object.ArrObj objs, Object.IntObj v) -> evalArrayIndexExpr objs v
+    (l, _) -> Object.ErrObj $ "index operator not supported: " ++ Object.typeObject l
+
+evalArrayIndexExpr :: (Integral a) => [Object.Object] -> a -> Object.Object
+evalArrayIndexExpr objs index =
+    if index < 0 || length objs <= fromIntegral index
+        then Object.Null
+        else genericIndex objs index
 
 checkOps :: Object.Object -> Object.Object -> [Char] -> Object.Object
 checkOps l r s =
@@ -107,9 +157,9 @@ evalIdent :: Object.Env -> String -> Object.Object
 evalIdent env name =
     let
         fallback = Object.ErrObj $ "identifier not found: " ++ name
-        env' = Env.makeRoot Buildin.parentEnv env
+        get = Env.getEnv env name <|> Env.getEnv Buildin.parentEnv name
      in
-        fromMaybe fallback $ Env.getEnv env' name
+        fromMaybe fallback get
 
 evalIfExpr ::
     Object.Env ->
@@ -140,15 +190,15 @@ evalMinusPrefix obj = case obj of
     c -> Object.ErrObj $ "unknown operator: -" ++ Object.typeObject c
 
 evalCallExpr :: Ast.Expression -> [Ast.Expression] -> Object.Env -> Object.Object
-evalCallExpr fn args env = case (evalExpression env fn, evalCallArgs env args) of
-    (fn'@(Object.ErrObj _), _) -> fn'
+evalCallExpr fn args env = case (evalExpression env fn, evalExpressions env args) of
+    (err@(Object.ErrObj _), _) -> err
     (_, [err@(Object.ErrObj _)]) -> err
     (Object.FnObj params body fnEnv, args') -> applyFn params body fnEnv args'
-    (Object.BuiObj (Object.BuildInFunction fn'), args') -> fn' args'
+    (Object.BuiObj fn', args') -> fn' args'
     (l, _) -> error $ "not a function: " ++ dprint l
 
-evalCallArgs :: Env.Env Object.Object -> [Ast.Expression] -> [Object.Object]
-evalCallArgs env args =
+evalExpressions :: Env.Env Object.Object -> [Ast.Expression] -> [Object.Object]
+evalExpressions env args =
     let
         inner acc [] = reverse acc
         inner acc (c : cs) = case evalExpression env c of

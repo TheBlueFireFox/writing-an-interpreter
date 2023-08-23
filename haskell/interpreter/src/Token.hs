@@ -27,6 +27,8 @@ data TokenType
     | RParen
     | LBrace
     | RBrace
+    | LBracket
+    | RBracket
     | -- Keywords
       Function
     | Let
