@@ -28,7 +28,8 @@ data Object
     | FnObj [Expression] Statement Env -- Params Body Env
     | BuiObj BuildInFunction -- Fn
     | ErrObj String
-    deriving (Show, Eq)
+    deriving(Show, Eq)
+
 
 typeObject :: Object -> String
 typeObject obj = case obj of

@@ -16,18 +16,18 @@ spec = do
     testStrObj
     testBangObj
     testIfElse
+    testArray
     testReturn
     testErrorHandling
     testLet
     testFun
     testBuildIns
-    testArray
     testDrivingArrays
 
-testEval :: String -> Object.Object
+testEval :: String -> IO Object.Object
 testEval input = case parse input of
     Left err -> error $ head err
-    Right prog -> fst $ evalProgram newEnv prog
+    Right prog -> fst <$> ((`evalProgram` prog) =<< newEnv)
 
 testIntegerObj :: SpecWith ()
 testIntegerObj = do
@@ -42,14 +42,17 @@ testIntegerObj = do
                     [ Object.IntObj 5
                     , Object.IntObj 10
                     ]
-            map testEval input `shouldBe` expected
+            t <- mapM testEval input
+            t `shouldBe` expected
         it "negation" $ do
             let
                 input =
                     ["-5", "-10"]
                 expected =
                     [Object.IntObj (-5), Object.IntObj (-10)]
-            map testEval input `shouldBe` expected
+
+            t <- mapM testEval input
+            t `shouldBe` expected
         it "evaluation" $ do
             let
                 rawInput =
@@ -66,8 +69,8 @@ testIntegerObj = do
                     , ("(5 + 10 * 2 + 15 / 3) * 2 + -10", 50)
                     ]
                 (input, expected) = unzip rawInput
-
-            map testEval input `shouldBe` map Object.IntObj expected
+            t <- mapM testEval input
+            t `shouldBe` map Object.IntObj expected
 
 testBoolObj :: SpecWith ()
 testBoolObj = do
@@ -82,7 +85,8 @@ testBoolObj = do
                     [ Object.BoolObj True
                     , Object.BoolObj False
                     ]
-            map testEval input `shouldBe` expected
+            t <- mapM testEval input
+            t `shouldBe` expected
         it "evaluation bool" $ do
             let
                 rawInput =
@@ -96,7 +100,8 @@ testBoolObj = do
                     ]
 
                 (input, expected) = unzip rawInput
-            map testEval input `shouldBe` map Object.BoolObj expected
+            t <- mapM testEval input
+            t `shouldBe` map Object.BoolObj expected
         it "evaluation Integer" $ do
             let
                 rawInput =
@@ -111,7 +116,8 @@ testBoolObj = do
                     ]
 
                 (input, expected) = unzip rawInput
-            map testEval input `shouldBe` map Object.BoolObj expected
+            t <- mapM testEval input
+            t `shouldBe` map Object.BoolObj expected
 
 testStrObj :: SpecWith ()
 testStrObj =
@@ -120,12 +126,14 @@ testStrObj =
             let
                 input = "\"Hello World!\""
                 expected = Object.StrObj "Hello World!"
-            testEval input `shouldBe` expected
+            t <- testEval input
+            t `shouldBe` expected
         it "concatination" $ do
             let
                 input = "\"Hello\" + \" \" + \"World!\""
                 expected = Object.StrObj "Hello World!"
-            testEval input `shouldBe` expected
+            t <- testEval input
+            t `shouldBe` expected
 
 testBangObj :: SpecWith ()
 testBangObj = do
@@ -142,7 +150,8 @@ testBangObj = do
                     ]
                 process = bimap testEval Object.BoolObj
                 (got, expected) = unzip . map process $ lst
-            got `shouldBe` expected
+            g <- sequence got
+            g `shouldBe` expected
 
 testIfElse :: SpecWith ()
 testIfElse = do
@@ -160,7 +169,8 @@ testIfElse = do
                     ]
                 process = first testEval
                 (got, expected) = unzip . map process $ lst
-            got `shouldBe` expected
+            g <- sequence got
+            g `shouldBe` expected
 
 testArray :: SpecWith ()
 testArray = do
@@ -172,7 +182,8 @@ testArray = do
                     Object.ArrObj
                         [ Object.IntObj v | v <- [1, 4, 6]
                         ]
-            testEval input `shouldBe` expected
+            g <- testEval input
+            g `shouldBe` expected
         it "index expressions" $ do
             let
                 lst =
@@ -188,13 +199,15 @@ testArray = do
                     ]
                 process = first testEval
                 (got, expected) = unzip . map process $ lst
-            got `shouldBe` expected
+            g <- sequence got
+            g `shouldBe` expected
         it "index expressions with math" $ do
             let
                 -- this test createed problems so here I am testing only it
                 got = testEval "let myArray = [1, 2, 3]; myArray[0] + myArray[1] + myArray[2];"
                 expected = Object.IntObj 6
-            got `shouldBe` expected
+            g <- got
+            g `shouldBe` expected
 
 testReturn :: SpecWith ()
 testReturn = do
@@ -209,12 +222,14 @@ testReturn = do
                     ]
                 process = first testEval
                 (got, expected) = unzip . map process $ lst
-            got `shouldBe` expected
+            g <- sequence got
+            g `shouldBe` expected
         it "blockStatements" $ do
             let
                 input = "if (10 > 1) { if (10 > 1) { return 10; } return 1; }"
                 expected = Object.IntObj 10
-            testEval input `shouldBe` expected
+            t <- testEval input
+            t `shouldBe` expected
 
 testErrorHandling :: SpecWith ()
 testErrorHandling = do
@@ -233,13 +248,15 @@ testErrorHandling = do
                     ]
                 process = bimap testEval Object.ErrObj
                 (got, expected) = unzip . map process $ lst
-            got `shouldBe` expected
+            g <- sequence got
+            g `shouldBe` expected
         it "identifiers" $ do
             let
                 lst = [("foobar", "identifier not found: foobar")]
                 process = bimap testEval Object.ErrObj
                 (got, expected) = unzip . map process $ lst
-            got `shouldBe` expected
+            g <- sequence got
+            g `shouldBe` expected
 
 testLet :: SpecWith ()
 testLet = do
@@ -254,7 +271,8 @@ testLet = do
                     ]
                 process = bimap testEval Object.IntObj
                 (got, expected) = unzip . map process $ lst
-            got `shouldBe` expected
+            g <- sequence got
+            g `shouldBe` expected
 
 testFun :: SpecWith ()
 testFun = do
@@ -267,8 +285,17 @@ testFun = do
                         ( AddExpr (IdentExpr "x") (IntegerExpr 2)
                         )
                     ]
-                expected = Object.FnObj [IdentExpr "x"] (BlockStatement blk) Environment.newEnv
-            testEval input `shouldBe` expected
+                eparams = [IdentExpr "x"]
+                ebody = BlockStatement blk
+            -- expected <- Object.FnObj [IdentExpr "x"] (BlockStatement blk) <$> Environment.newEnv
+            t <- testEval input
+            -- direct comparison doesn't work as the Environment.Env is a IORef and the Eq
+            -- for that uses pointer equality (not very useful here)
+            let (params, body) = case t of
+                    (Object.FnObj p b _) -> (p, b)
+                    _ -> error "incorrect type"
+            params `shouldBe` eparams
+            body `shouldBe` ebody
         it "overview" $ do
             let
                 lst =
@@ -281,12 +308,14 @@ testFun = do
                     ]
                 process = bimap testEval Object.IntObj
                 (got, expected) = unzip . map process $ lst
-            got `shouldBe` expected
+            g <- sequence got
+            g `shouldBe` expected
         it "closures" $ do
             let
                 input = "let newAdder = fn(x) { fn(y) { x + y }; }; let addTwo = newAdder(2); addTwo(2)"
                 expected = Object.IntObj 4
-            testEval input `shouldBe` expected
+            t <- testEval input
+            t `shouldBe` expected
 
 testBuildIns :: SpecWith ()
 testBuildIns =
@@ -302,7 +331,8 @@ testBuildIns =
                     ]
                 process = first testEval
                 (got, expected) = unzip . map process $ lst
-            got `shouldBe` expected
+            g <- sequence got
+            g `shouldBe` expected
 
 testDrivingArrays :: SpecWith ()
 testDrivingArrays =
@@ -323,7 +353,7 @@ testDrivingArrays =
                 input = inputMap ++ inputExpr
 
                 expected = Object.IntObj 42
-                got = testEval input
+            got <- testEval input
             got `shouldBe` expected
         it "map -- function in function" $ do
             let
@@ -340,13 +370,13 @@ testDrivingArrays =
                     \   iter(arr, []);                                              \
                     \ };                                                            \
                     \"
-                inputArr = "let a = [1, 2, 3, 4];"
+                inputArr = "let a = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];"
                 inputDouble = "let double = fn(x) { x * 2 };"
                 inputExpr = "map(a, double);"
                 input = inputMap ++ inputArr ++ inputDouble ++ inputExpr
 
-                expected = Object.ArrObj $ [Object.IntObj v | v <- [2, 4, 6, 8]]
-                got = testEval input
+                expected = Object.ArrObj $ [Object.IntObj v | v <- [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]]
+            got <- testEval input
             got `shouldBe` expected
         it "reduce" $ do
             let
@@ -371,8 +401,8 @@ testDrivingArrays =
                     \     });                                                        \
                     \ };                                                             \
                     \"
-                arr = "sum([1, 2, 3, 4, 5]);"
+                arr = "sum([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);"
                 input = reduceFn ++ sumFn ++ arr
-                expected = Object.IntObj 15
-                got = testEval input
+                expected = Object.IntObj 55
+            got <- testEval input
             got `shouldBe` expected

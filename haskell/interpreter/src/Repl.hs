@@ -26,9 +26,9 @@ runner :: IO ()
 runner = do
     putStrLn "Hello! This is the Monkey programming language!"
     putStrLn "Feel free to type in commands"
-    replLoop Env.newEnv
+    replLoop =<< Env.newEnv
 
-eval :: Object.Env -> String -> (Object.Object, Object.Env)
+eval :: Object.Env -> String -> IO (Object.Object, Object.Env)
 eval env input = case parse input of
     Left err -> error $ "There was an error : " ++ head err
     Right prog -> evalProgram env prog
@@ -51,8 +51,7 @@ process env = do
 
 innerProcess :: Object.Env -> String -> IO ()
 innerProcess oenv line = do
-    let
-        (obj, env) = eval oenv line
+    (obj, env) <- eval oenv line
     case obj of
         Object.Null -> pure ()
         others -> printLine . dprint $ others
