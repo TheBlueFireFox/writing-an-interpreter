@@ -199,7 +199,7 @@ evalCallExpr fn args env = do
         (err@(Object.ErrObj _), _) -> pure err
         (_, [err@(Object.ErrObj _)]) -> pure err
         (Object.FnObj params body fnEnv, args') -> applyFn params body fnEnv args'
-        (Object.BuiObj fn', args') -> pure $ fn' args'
+        (Object.BuiObj fn', args') -> fn' args'
         (l, _) -> error $ "not a function: " ++ dprint l
 
 evalExpressions :: Env.Env Object.Object -> [Ast.Expression] -> IO [Object.Object]

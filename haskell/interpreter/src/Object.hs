@@ -11,7 +11,7 @@ import Data.HashMap.Strict (HashMap, toList)
 
 type Env = Environment.Env Object
 
-type BuildInFunction = [Object.Object] -> Object.Object
+type BuildInFunction = [Object.Object] -> IO Object.Object
 
 -- We don't care about this here
 instance Show BuildInFunction where
