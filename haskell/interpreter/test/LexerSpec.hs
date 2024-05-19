@@ -273,6 +273,7 @@ testNextTokenComplete =
                 \ \"foo \\\" bar\" \
                 \ \"\\n \\r \\t\" \
                 \ [1, 2]; \
+                \{\"foo\": \"bar\"}\
                 \"
 
             expected =
@@ -358,6 +359,11 @@ testNextTokenComplete =
                 , Int 2
                 , RBracket
                 , Semicolon
+                , LBrace
+                , Str "foo"
+                , Colon
+                , Str "bar"
+                , RBrace
                 , Eof
                 ]
         run input `shouldBe` expected

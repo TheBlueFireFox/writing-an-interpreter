@@ -5,6 +5,8 @@ import Ast qualified
 import Buildin qualified
 import Control.Applicative ((<|>))
 import Control.Monad (foldM, liftM2)
+import Data.Either (partitionEithers)
+import Data.HashMap.Strict (HashMap, fromList, (!?))
 import Data.Int (Int64)
 import Data.List (genericIndex)
 import Data.Maybe (fromMaybe)
@@ -74,6 +76,7 @@ evalExpression env expr =
         Ast.CallExpr fn args -> evalCallExpr fn args env
         Ast.ArrExpr objs -> Object.ArrObj <$> evalExpressions env objs
         Ast.IndExpr left index -> evalIndexExpr env left index
+        Ast.HashExpr m -> evalHashExpr env m
 
 evalIndexExpr :: Object.Env -> Ast.Expression -> Ast.Expression -> IO Object.Object
 evalIndexExpr env left index = do
@@ -83,6 +86,7 @@ evalIndexExpr env left index = do
         (err@(Object.ErrObj _), _) -> err
         (_, err@(Object.ErrObj _)) -> err
         (Object.ArrObj objs, Object.IntObj v) -> evalArrayIndexExpr objs v
+        (Object.HashObj objs, v) -> evalHashIndexExpr objs v
         (l, _) -> Object.ErrObj $ "index operator not supported: " ++ Object.typeObject l
 
 evalArrayIndexExpr :: (Integral a) => [Object.Object] -> a -> Object.Object
@@ -90,6 +94,11 @@ evalArrayIndexExpr objs index =
     if index < 0 || length objs <= fromIntegral index
         then Object.Null
         else genericIndex objs index
+
+evalHashIndexExpr :: HashMap Object.Object Object.Object -> Object.Object -> Object.Object
+evalHashIndexExpr m key = case Object.genSimpleHash key of
+    Right _ -> fromMaybe Object.Null $ m !? key
+    Left err -> Object.ErrObj err
 
 checkOps :: Object.Object -> Object.Object -> [Char] -> Object.Object
 checkOps l r s =
@@ -221,3 +230,24 @@ extendFnEnv params fnEnv args = do
         v -> error $ "unexpected parameter expression: " ++ show v
 
     apply env (param, arg) = Env.setEnv env (unwrapExpr param) arg
+
+evalHashExpr :: Object.Env -> [(Ast.Expression, Ast.Expression)] -> IO Object.Object
+evalHashExpr env m = do
+    expr_pairs <- mapM inner m
+    let (l, r) = partitionEithers expr_pairs
+    if null l
+        then
+            pure $ Object.HashObj $ fromList r
+        else
+            pure $ head l
+  where
+    inner (k, v) = do
+        k' <- evalExpression env k
+        v' <- evalExpression env v
+        let f = case (k', v') of
+                (err@(Object.ErrObj _), _) -> Left err
+                (_, err@(Object.ErrObj _)) -> Left err
+                (key, value) -> case Object.genSimpleHash key of
+                    Right _ -> Right (key, value)
+                    Left err -> Left $ Object.ErrObj err
+        pure f

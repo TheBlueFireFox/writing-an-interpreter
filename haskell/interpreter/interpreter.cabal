@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.35.1.
+-- This file has been generated from package.yaml by hpack version 0.36.0.
 --
 -- see: https://github.com/sol/hpack
 
@@ -42,6 +42,7 @@ library
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.7 && <5
+    , hashable
     , unordered-containers
   default-language: GHC2021
 
@@ -54,6 +55,7 @@ executable interpreter-exe
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , hashable
     , interpreter
     , unordered-containers
   default-language: GHC2021
@@ -65,6 +67,7 @@ test-suite interpreter-test
       AstSpec
       EvaluatorSpec
       LexerSpec
+      ObjectSpec
       ParserSpec
       Paths_interpreter
   hs-source-dirs:
@@ -72,6 +75,7 @@ test-suite interpreter-test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.7 && <5
+    , hashable
     , hspec ==2.*
     , interpreter
     , unordered-containers

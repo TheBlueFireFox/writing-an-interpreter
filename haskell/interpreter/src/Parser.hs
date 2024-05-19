@@ -93,6 +93,7 @@ parsePrefixExpression x = case x of
     (Minus : cs) -> parseNegative cs
     (LParen : cs) -> parseGrouped cs
     (LBracket : cs) -> parseArray cs
+    (LBrace : cs) -> parseHashLit cs
     (If : cs) -> parseIf cs
     (Function : cs) -> parseFnLit cs
     (c : _) -> Left ["Is not a prefix type " ++ show c]
@@ -241,3 +242,26 @@ parseFnLit token
                 (params, token') <- helperParseParams token
                 (body, token'') <- parseBlockStatement token'
                 Right (FnExpr params body, token'')
+
+parseHashLit :: [TokenType] -> Either Errors (Expression, [TokenType])
+parseHashLit t = inner (mempty, t)
+  where
+    inner (acc, token)
+        | null token = Left ["Empty token list"]
+        | head token == RBrace = Right (HashExpr (reverse acc), tail token)
+        | otherwise = parseFirst token >>= checkColon >>= parseSecond >>= checkEnd acc >>= inner
+
+    checkColon (left, token)
+        | null token = Left ["Empty token list"]
+        | head token /= Colon = Left ["Missing Colon"]
+        | otherwise = Right (left, tail token)
+
+    parseFirst = parseExpression Lowest
+
+    parseSecond (left, tokens) = first (left,) <$> parseExpression Lowest tokens
+
+    checkEnd acc (pair, tokens)
+        | null tokens = Left ["Empty token list"]
+        | head tokens == Comma = Right (pair : acc, tail tokens)
+        | head tokens == RBrace = Right (pair : acc, tokens)
+        | otherwise = Left ["unexpected token " ++ show (head tokens)]

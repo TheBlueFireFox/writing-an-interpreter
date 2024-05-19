@@ -3,7 +3,8 @@ module ParserSpec (spec) where
 import Test.Hspec
 
 import Ast qualified
-import Parser
+import Data.Bifunctor (Bifunctor (bimap, first))
+import Parser (parse)
 
 spec :: Spec
 spec = do
@@ -20,6 +21,7 @@ spec = do
     testArrayLitteralExpression
     testFunctionLitteralExpression
     testCallExpression
+    testHashLiteralExpression
 
 testLetStatements :: SpecWith ()
 testLetStatements =
@@ -380,4 +382,45 @@ testCallExpression =
                                 ]
                         ]
 
+            parse input `shouldBe` expected
+
+testHashLiteralExpression :: SpecWith ()
+testHashLiteralExpression =
+    describe "TestHashLiteralExpression" $ do
+        let
+            str = Ast.StrExpr
+            int = Ast.IntegerExpr
+            ex = Ast.ExpressionStatement
+        it "empty hash literal" $ do
+            let
+                input = "{}"
+                expected =
+                    Right . Ast.Program $
+                        [ ex $ Ast.HashExpr mempty
+                        ]
+            parse input `shouldBe` expected
+        it "parsing hash literals" $ do
+            let
+                input = "{\"one\": 1, \"two\": 2, \"three\": 3}"
+                expected =
+                    Right . Ast.Program $
+                        [ ex $
+                            Ast.HashExpr $
+                                map (bimap str int) [("one", 1), ("two", 2), ("three", 3)]
+                        ]
+            parse input `shouldBe` expected
+        it "parsing hash literals" $ do
+            let
+                input = "{\"one\": 0 + 1, \"two\": 10 - 8, \"three\": 15 / 5}"
+                expected =
+                    Right . Ast.Program $
+                        [ ex $
+                            Ast.HashExpr $
+                                map
+                                    (first str)
+                                    [ ("one", Ast.AddExpr (int 0) (int 1))
+                                    , ("two", Ast.MinExpr (int 10) (int 8))
+                                    , ("three", Ast.DivExpr (int 15) (int 5))
+                                    ]
+                        ]
             parse input `shouldBe` expected

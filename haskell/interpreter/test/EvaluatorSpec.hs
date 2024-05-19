@@ -4,6 +4,7 @@ import Test.Hspec
 
 import Ast (Expression (..), Statement (..))
 import Data.Bifunctor (Bifunctor (bimap), first)
+import Data.HashMap.Strict (fromList)
 import Environment (newEnv)
 import Evaluator (evalProgram)
 import Object qualified
@@ -23,6 +24,7 @@ spec = do
     testFun
     testBuildIns
     testDrivingArrays
+    testHashLiterals
 
 testEval :: String -> IO Object.Object
 testEval input = case parse input of
@@ -245,6 +247,7 @@ testErrorHandling = do
                     , ("5; true + false; 5", "unknown operator: BOOLEAN + BOOLEAN")
                     , ("if (10 > 1) { true + false; }", "unknown operator: BOOLEAN + BOOLEAN")
                     , ("if (10 > 1) { if (10 > 1) { return true + false; } return 1;}", "unknown operator: BOOLEAN + BOOLEAN")
+                    , ("{\"name\": \"Monkey\"}[fn(x) { x }];", "unusable as hash key: FN")
                     ]
                 process = bimap testEval Object.ErrObj
                 (got, expected) = unzip . map process $ lst
@@ -406,3 +409,53 @@ testDrivingArrays =
                 expected = Object.IntObj 55
             got <- testEval input
             got `shouldBe` expected
+
+testHashLiterals :: SpecWith ()
+testHashLiterals = do
+    let
+        str = Object.StrObj
+        int = Object.IntObj
+        bool = Object.BoolObj
+        nil = Object.Null
+    describe "TestHashLiterals" $ do
+        it "eveluate complex hash literal" $ do
+            let
+                input =
+                    "\
+                    \   let two = \"two\";                             \
+                    \   {                                              \
+                    \      \"one\": 10 - 9,                            \
+                    \      two: 1 + 1,                                 \
+                    \      \"thr\" + \"ee\": 6 / 2,                    \
+                    \      4: 4,                                       \
+                    \      true: 5,                                    \
+                    \      false: 6                                    \
+                    \  }                                               \
+                    \"
+                expected =
+                    Object.HashObj . fromList $
+                        [ (str "one", int 1)
+                        , (str "two", int 2)
+                        , (str "three", int 3)
+                        , (int 4, int 4)
+                        , (bool True, int 5)
+                        , (bool False, int 6)
+                        ]
+            got <- testEval input
+            got `shouldBe` expected
+    describe "TestHashIndexExpressions" $ do
+        it "list of examples" $ do
+            let
+                input =
+                    [ ("{\"foo\": 5}[\"foo\"]", int 5)
+                    , ("{\"foo\": 5}[\"bar\"]", nil)
+                    , ("let key = \"foo\"; {\"foo\": 5}[key]", int 5)
+                    , ("{}[\"foo\"]", nil)
+                    , ("{5: 5}[5]", int 5)
+                    , ("{true: 5}[true]", int 5)
+                    , ("{false: 5}[false]", int 5)
+                    ]
+                process = first testEval
+                (got, expected) = unzip . map process $ input
+            g <- sequence got
+            g `shouldBe` expected

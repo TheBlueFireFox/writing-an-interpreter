@@ -22,6 +22,7 @@ data TokenType
     | NotEq
     | -- Delimeters
       Comma
+    | Colon
     | Semicolon
     | LParen
     | RParen

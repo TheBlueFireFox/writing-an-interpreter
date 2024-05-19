@@ -1,7 +1,13 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
+
 module Ast (Program (..), Statement (..), Expression (..), Display (..)) where
 
+import Data.Hashable (Hashable)
 import Data.Int (Int64)
 import Data.List (intercalate)
+import GHC.Generics (Generic)
 
 class Display a where
     dprint :: a -> String
@@ -17,7 +23,8 @@ data Statement
     | ReturnStatement Expression
     | ExpressionStatement Expression
     | BlockStatement [Statement]
-    deriving (Eq, Show)
+    deriving stock (Eq, Show, Generic)
+    deriving anyclass (Hashable)
 
 instance Display Statement where
     dprint (LetStatement name expr) = "let " ++ name ++ " = " ++ dprint expr ++ ";"
@@ -42,10 +49,12 @@ data Expression
     | LeExpr Expression Expression
     | IndExpr Expression Expression -- Object Index
     | ArrExpr [Expression] -- Elements
+    | HashExpr [(Expression, Expression)] -- Elements
     | IfExpr Expression Statement (Maybe Statement) -- Condition BlockStatement BlockStatement
     | FnExpr [Expression] Statement -- Params BlockStatement
     | CallExpr Expression [Expression] -- Function Arguments
-    deriving (Eq, Show)
+    deriving stock (Eq, Show, Generic)
+    deriving anyclass (Hashable)
 
 showHelperSingle :: (Display a) => String -> a -> String
 showHelperSingle sym expr = "(" ++ sym ++ dprint expr ++ ")"
@@ -79,6 +88,7 @@ instance Display Expression where
     dprint (LeExpr l r) = showHelperTwo "<" l r
     dprint (IndExpr obj ind) = "(" ++ dprint obj ++ "[" ++ dprint ind ++ "])"
     dprint (ArrExpr arr) = "[" ++ intercalate ", " (map dprint arr) ++ "]"
+    dprint (HashExpr m) = "{" ++ intercalate ", " (map (\(l, r) -> dprint l ++ ": " ++ dprint r) m) ++ "}"
     dprint (IfExpr cond cons alt) = showHelperIf cond cons alt
     dprint (FnExpr param blk) = "fun (" ++ intercalate ", " (map dprint param) ++ ")" ++ dprint blk
     dprint (CallExpr fn param) = dprint fn ++ "(" ++ intercalate ", " (map dprint param) ++ ")"

@@ -112,6 +112,7 @@ parserSymbols x = case x of
     ('}' : _) -> Just (RBrace, 1)
     ('[' : _) -> Just (LBracket, 1)
     (']' : _) -> Just (RBracket, 1)
+    (':' : _) -> Just (Colon, 1)
     _ -> Nothing
 
 skipWhitespace :: String -> (String, Int)
