@@ -17,58 +17,57 @@ new :: String -> Lexer
 new = Lexer
 
 tokenize :: Lexer -> ([TokenType], Lexer)
-tokenize =
-    let
-        inner (Illegal v : _) _ = error $ "Illegal character -- " ++ v
-        inner acc@(Eof : _) l = (reverse acc, l)
-        inner acc l = (uncurry inner . swap . second (: acc) . nextToken) l
-     in
-        inner []
+tokenize = inner []
+  where
+    inner (Illegal v : _) _ = error $ "Illegal character -- " ++ v
+    inner acc@(Eof : _) l = (reverse acc, l)
+    inner acc l = uncurry inner . swap . second (: acc) . nextToken $ l
 
 advanceLexer :: Lexer -> Int -> Lexer
 advanceLexer (Lexer input) v = Lexer $ drop v input
 
 nextToken :: Lexer -> (Lexer, TokenType)
-nextToken l@(Lexer input) =
-    let
-        endOfFile v = case v of
-            [] -> Just (Eof, 0)
-            _ -> Nothing
+nextToken l@(Lexer input) = first (advanceLexer l) $ runHelper input
+  where
+    endOfFile v = case v of
+        [] -> Just (Eof, 0)
+        _ -> Nothing
 
-        parseClean v = endOfFile v <|> parserSymbols v <|> keywords v <|> readIdentifier v <|> readInteger v <|> readString v <|> Just (Illegal v, 0)
+    parseClean v =
+        endOfFile v
+            <|> parserSymbols v
+            <|> keywords v
+            <|> readIdentifier v
+            <|> readInteger v
+            <|> readString v
+            <|> Just (Illegal v, 0)
 
-        parser v len = second (+ len) <$> parseClean v
+    parser v len = second (+ len) <$> parseClean v
 
-        runHelper = swap . fromJust . uncurry parser . skipWhitespace
-     in
-        first (advanceLexer l) $ runHelper input
+    runHelper = swap . fromJust . uncurry parser . skipWhitespace
 
 isLetter :: Char -> Bool
 isLetter c = or [fun c | fun <- [isUpper, isLower, (== '_')]]
 
 keywords :: String -> Maybe (TokenType, Int)
-keywords str =
-    let
-        match v = case v of
-            "fn" -> Just Function
-            "let" -> Just Let
-            "true" -> Just KTrue
-            "false" -> Just KFalse
-            "if" -> Just If
-            "else" -> Just Else
-            "return" -> Just Return
-            _ -> Nothing
-        s = takeWhile isLetter str
-     in
-        (,) <$> match s <*> Just (length s)
+keywords str = (,) <$> match s <*> Just (length s)
+  where
+    s = takeWhile isLetter str
+    match v = case v of
+        "fn" -> Just Function
+        "let" -> Just Let
+        "true" -> Just KTrue
+        "false" -> Just KFalse
+        "if" -> Just If
+        "else" -> Just Else
+        "return" -> Just Return
+        _ -> Nothing
 
 readBlock :: (a1 -> Bool) -> ([a1] -> a2) -> [a1] -> Maybe (a2, Int)
-readBlock p f =
-    let
-        helper [] = Nothing
-        helper b = Just (f b, length b)
-     in
-        helper . takeWhile p
+readBlock p f = helper . takeWhile p
+  where
+    helper [] = Nothing
+    helper b = Just (f b, length b)
 
 readIdentifier :: String -> Maybe (TokenType, Int)
 readIdentifier = readBlock isLetter Ident
@@ -77,20 +76,19 @@ readInteger :: String -> Maybe (TokenType, Int)
 readInteger = readBlock isDigit (Int . read)
 
 readString :: String -> Maybe (TokenType, Int)
-readString v =
-    let
-        inner _ _ [] = Nothing
-        inner acc count ('"' : _) = Just (Str (reverse acc), count + 1)
-        inner acc count ('\\' : '"' : cs) = inner ('"' : acc) (count + 2) cs
-        inner acc count ('\\' : 'n' : cs) = inner ('\n' : acc) (count + 2) cs
-        inner acc count ('\\' : 'r' : cs) = inner ('\r' : acc) (count + 2) cs
-        inner acc count ('\\' : 't' : cs) = inner ('\t' : acc) (count + 2) cs
-        inner acc count (curr : cs) = inner (curr : acc) (count + 1) cs
+readString = outer
+  where
+    outer ('"' : c) = inner [] 1 c
+    outer _ = Nothing
 
-        outer ('"' : c) = inner [] 1 c
-        outer _ = Nothing
-     in
-        outer v
+    inner acc count s = case s of
+        [] -> Nothing
+        ('\\' : '"' : cs) -> inner ('"' : acc) (count + 2) cs
+        ('\\' : 'n' : cs) -> inner ('\n' : acc) (count + 2) cs
+        ('\\' : 'r' : cs) -> inner ('\r' : acc) (count + 2) cs
+        ('\\' : 't' : cs) -> inner ('\t' : acc) (count + 2) cs
+        ('"' : _) -> Just (Str (reverse acc), count + 1)
+        (curr : cs) -> inner (curr : acc) (count + 1) cs
 
 parserSymbols :: String -> Maybe (TokenType, Int)
 parserSymbols x = case x of

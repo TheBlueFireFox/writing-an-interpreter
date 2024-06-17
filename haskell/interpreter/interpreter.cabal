@@ -30,7 +30,6 @@ library
       Environment
       Evaluator
       Lexer
-      Lib
       Object
       Parser
       Repl

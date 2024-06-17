@@ -34,20 +34,19 @@ eval env input = case parse input of
     Right prog -> evalProgram env prog
 
 replLoop :: Object.Env -> IO ()
-replLoop env =
-    do
-        printPromt
-        done <- isEOF
-        if done
-            then putStrLn "\nBye!"
-            else process env
+replLoop env = do
+    printPromt
+    checkIfDone =<< isEOF
+  where
+    checkIfDone done
+        | done = putStrLn "\nBye!"
+        | otherwise = process env
 
 process :: Object.Env -> IO ()
-process env = do
-    line <- getLine
-    if line == "\n"
-        then replLoop env
-        else innerProcess env line
+process env = handleLine =<< getLine
+  where
+    handleLine "\n" = replLoop env
+    handleLine line = innerProcess env line
 
 innerProcess :: Object.Env -> String -> IO ()
 innerProcess oenv line = do

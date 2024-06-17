@@ -29,10 +29,12 @@ len :: [Object.Object] -> IO Object.Object
 len = pure . inner
   where
     inner [arg] = case arg of
-        Object.ArrObj s -> Object.IntObj $ fromIntegral $ length s
-        Object.StrObj s -> Object.IntObj $ fromIntegral $ length s
+        Object.ArrObj s -> genInt s
+        Object.StrObj s -> genInt s
         other -> Object.ErrObj $ printf "argument to \"len\" not supported, got %s" $ Object.typeObject other
     inner d = Object.ErrObj $ printf "wrong number of arguments. got=%d, want=1" $ length d
+
+    genInt = Object.IntObj . fromIntegral . length
 
 first :: [Object.Object] -> IO Object.Object
 first = pure . inner
