@@ -251,5 +251,5 @@ evalHashExpr env m = handleError . partitionEithers <$> mapM handleExpr m
         Left err -> Left $ Object.ErrObj err
 
     handleError (l, r)
-        | null l = Object.HashObj $ fromList r
-        | otherwise = head l
+        | [] <- l = Object.HashObj $ fromList r
+        | (x : _) <- l = x

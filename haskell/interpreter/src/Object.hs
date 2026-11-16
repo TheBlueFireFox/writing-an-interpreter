@@ -3,11 +3,11 @@ module Object (module Object) where
 import Ast (Display (dprint), Expression, Statement)
 import Data.Bifunctor (bimap)
 import Data.Bool (bool)
+import Data.HashMap.Strict (HashMap, toList)
 import Data.Hashable (Hashable (..))
 import Data.Int (Int64)
 import Data.List (intercalate)
 import Environment qualified
-import Data.HashMap.Strict (HashMap, toList)
 
 type Env = Environment.Env Object
 
@@ -53,7 +53,6 @@ genHash salt obj = case obj of
 genSimpleHash :: Object -> Either String Int
 genSimpleHash = Object.genHash 0
 
-
 typeObject :: Object -> String
 typeObject obj = case obj of
     Null -> "NULL"
@@ -76,5 +75,5 @@ instance Display Object where
     dprint (ErrObj v) = "ERROR: " ++ v
     dprint (BuiObj _) = "builtin function"
     dprint (ArrObj arr) = "[" ++ intercalate ", " (map dprint arr) ++ "]"
-    dprint (HashObj obj) = "{" ++ intercalate ", " (map (\(k,v) -> dprint k ++ ": " ++ dprint v) (toList obj)) ++ "}"
+    dprint (HashObj obj) = "{" ++ intercalate ", " (map (\(k, v) -> dprint k ++ ": " ++ dprint v) (toList obj)) ++ "}"
     dprint (FnObj params expr _) = "fn(" ++ intercalate ", " (map dprint params) ++ ")" ++ "{\n" ++ dprint expr ++ "\n}"

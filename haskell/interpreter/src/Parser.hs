@@ -3,7 +3,6 @@ module Parser (parse) where
 import Ast (Expression (..), Program (Program), Statement (..))
 import Control.Arrow (first, second)
 import Data.Bifunctor (Bifunctor (bimap))
-import Data.Bool (bool)
 import Data.Int (Int64)
 import Lexer (run)
 import Token (TokenType (..))
@@ -53,7 +52,9 @@ parseStatement = inner
     inner xs = bimap ExpressionStatement removeSemi <$> parseExpression Lowest xs
 
 removeSemi :: [TokenType] -> [TokenType]
-removeSemi cs = bool cs (tail cs) (head cs == Semicolon)
+removeSemi cs
+    | (Semicolon : rest) <- cs = rest
+    | otherwise = cs
 
 parseLetStatements :: [TokenType] -> Either [String] (Statement, [TokenType])
 parseLetStatements [] = Left ["Missing Tokens"]
@@ -95,15 +96,18 @@ parseExprList :: TokenType -> [TokenType] -> Either Errors ([Expression], [Token
 parseExprList stop = preCond
   where
     preCond toks'
-        | head toks' == stop = Right ([], tail toks')
+        | current : rest <- toks', current == stop = Right ([], rest)
         -- loop
         -- add a fake comma to the list, so that the correct loop variant is used for
         -- processing
         | otherwise = loop [] (Comma : toks')
 
     loop acc toks'
-        | head toks' == Comma = uncurry loop . first (: acc) =<< parseExpression Lowest (tail toks')
-        | head toks' == stop = Right (reverse acc, tail toks')
+        | [] <- toks' = Left ["Empty token list"]
+        | Comma : rest <- toks' = do
+            (expr, rest') <- parseExpression Lowest rest
+            loop (expr : acc) rest'
+        | current : rest <- toks', current == stop = Right (reverse acc, rest)
         | otherwise = Left ["unsupported token " ++ show toks' ++ " in call expression"]
 
 parseInfixExpression :: Predecence -> Expression -> [TokenType] -> Either Errors (Expression, [TokenType])
@@ -174,14 +178,16 @@ parseInfix expr tok xs = first expr <$> parseExpression (mapPredecence tok) xs
 
 parseIf :: [TokenType] -> Either Errors (Expression, [TokenType])
 parseIf token
-    | null token = Left ["Empty token list"]
-    | head token /= LParen = Left ["Missing left paren"]
-    | otherwise = do
-        (cond, toksOuter) <- parseExpression Lowest (tail token)
+    | [] <- token = Left ["Empty token list"]
+    | LParen : rest <- token = inner rest
+    | otherwise = Left ["Missing left paren"]
+  where
+    inner token' = do
+        (cond, toksOuter) <- parseExpression Lowest token'
         (cons, toksInner) <- helperCons toksOuter
         (alt, toks) <- helperAlt toksInner
-        Right (IfExpr cond cons alt, toks)
-  where
+        pure (IfExpr cond cons alt, toks)
+
     helperCons (RParen : LBrace : tok) = parseBlockStatement tok
     helperCons _ = Left ["Missing {"]
 
@@ -194,12 +200,14 @@ parseFnLit :: [TokenType] -> Either Errors (Expression, [TokenType])
 parseFnLit = inner
   where
     inner token
-        | null token = Left ["Empty token list"]
-        | head token /= LParen = Left ["Missing left paren"]
-        | otherwise = do
-            (params, token') <- helperParseParams token
-            (body, token'') <- parseBlockStatement token'
-            Right (FnExpr params body, token'')
+        | [] <- token = Left ["Empty token list"]
+        | LParen : _ <- token = helperInner token
+        | otherwise = Left ["Missing left paren"]
+
+    helperInner token = do
+        (params, token') <- helperParseParams token
+        (body, token'') <- parseBlockStatement token'
+        pure (FnExpr params body, token'')
 
     helperIdentToks toks = case toks of
         [] -> Left ["Emptry token list"]
@@ -211,39 +219,39 @@ parseFnLit = inner
         (LParen : toks') -> helperParseParamsLoopCond . first (: acc) =<< helperIdentToks toks'
         _ -> Left ["Weird token " ++ show toks]
 
-    helperParseParamsLoopCond (acc, toks) = case toks of
-        [] -> Left ["Emptry token list"]
-        (RParen : _) -> Right (reverse acc, toks)
-        (Comma : toks') -> helperParseParamsLoopCond . first (: acc) =<< helperIdentToks toks'
-        _ -> Left ["Odd Token for params " ++ show (head toks)]
+    helperParseParamsLoopCond (acc, toks)
+        | [] <- toks = Left ["Emptry token list"]
+        | RParen : _ <- toks = Right (reverse acc, toks)
+        | Comma : rest <- toks = helperParseParamsLoopCond . first (: acc) =<< helperIdentToks rest
+        | current : _ <- toks = Left ["Odd Token for params " ++ show current]
 
     helperParseParamsPostCond (expr, toks)
-        | null toks = Left ["Empty token list"]
-        | head toks /= RParen = Left ["Missing RParen )" ++ show toks]
-        | toks !! 1 /= LBrace = Left ["Missing LBrace {" ++ show toks]
-        | otherwise = Right (expr, drop 2 toks)
+        | [] <- toks = Left ["Empty token list"]
+        | RParen : LBrace : rest <- toks = Right (expr, rest)
+        | RParen : _ <- toks = Left ["Missing RParen )" ++ show toks]
+        | otherwise = Left ["Missing LBrace {" ++ show toks]
 
     helperParseParams toks = helperParseParamsPostCond =<< helperParseParamsPreCond ([], toks)
 
 parseHashLit :: [TokenType] -> Either Errors (Expression, [TokenType])
 parseHashLit t = inner (mempty, t)
   where
-    inner (acc, token)
-        | null token = Left ["Empty token list"]
-        | head token == RBrace = Right (HashExpr (reverse acc), tail token)
-        | otherwise = inner =<< checkEnd acc =<< parseSecond =<< checkColon =<< parseFirst token
+    inner (acc, tokens)
+        | [] <- tokens = Left ["Empty token list"]
+        | RBrace : rest <- tokens = Right (HashExpr (reverse acc), rest)
+        | otherwise = inner =<< checkEnd acc =<< parseSecond =<< checkColon =<< parseFirst tokens
 
     checkColon (left, token)
-        | null token = Left ["Empty token list"]
-        | head token /= Colon = Left ["Missing Colon"]
-        | otherwise = Right (left, tail token)
+        | [] <- token = Left ["Empty token list"]
+        | Colon : rest <- token = Right (left, rest)
+        | otherwise = Left ["Missing Colon"]
 
     parseFirst = parseExpression Lowest
 
     parseSecond (left, tokens) = first (left,) <$> parseExpression Lowest tokens
 
     checkEnd acc (pair, tokens)
-        | null tokens = Left ["Empty token list"]
-        | head tokens == Comma = Right (pair : acc, tail tokens)
-        | head tokens == RBrace = Right (pair : acc, tokens)
-        | otherwise = Left ["unexpected token " ++ show (head tokens)]
+        | [] <- tokens = Left ["Empty token list"]
+        | Comma : rest <- tokens = Right (pair : acc, rest)
+        | RBrace : _ <- tokens = Right (pair : acc, tokens)
+        | current : _ <- tokens = Left ["unexpected token " ++ show current]
