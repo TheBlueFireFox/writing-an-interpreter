@@ -1,20 +1,19 @@
 module Repl (runner) where
 
-import GHC.IO.Handle (hFlush)
-import System.IO (isEOF, stdout)
-
 import Ast (Display (dprint))
 import Environment qualified as Env
 import Evaluator (evalProgram)
+import GHC.IO.Handle (hFlush)
 import Object qualified
 import Parser (parse)
+import System.IO (isEOF, stdout)
 
-promt :: String
-promt = ">> "
+prompt :: String
+prompt = ">> "
 
-printPromt :: IO ()
-printPromt = do
-    putStr promt
+printPrompt :: IO ()
+printPrompt = do
+    putStr prompt
     hFlush stdout
 
 printLine :: String -> IO ()
@@ -28,30 +27,33 @@ runner = do
     putStrLn "Feel free to type in commands"
     replLoop =<< Env.newEnv
 
-eval :: Object.Env -> String -> IO (Object.Object, Object.Env)
+eval :: Object.Env -> String -> IO (Either [String] (Object.Object, Object.Env))
 eval env input = case parse input of
-    Left err -> error $ "There was an error : " ++ head err
-    Right prog -> evalProgram env prog
+    Left [] -> pure $ Left ["There was an error and the error list is empty"]
+    Left errs -> pure $ Left errs
+    Right prog -> Right <$> evalProgram env prog
 
 replLoop :: Object.Env -> IO ()
 replLoop env = do
-    printPromt
-    checkIfDone =<< isEOF
-  where
-    checkIfDone done
-        | done = putStrLn "\nBye!"
-        | otherwise = process env
+    printPrompt
+    done <- isEOF
+    case done of
+        True -> putStrLn "\nBye!"
+        False -> replLoop =<< process env =<< getLine
 
-process :: Object.Env -> IO ()
-process env = handleLine =<< getLine
-  where
-    handleLine "\n" = replLoop env
-    handleLine line = innerProcess env line
+process :: Object.Env -> String -> IO (Object.Env)
+process env line
+    | null line = pure env
+    | otherwise = innerProcess env line
 
-innerProcess :: Object.Env -> String -> IO ()
+innerProcess :: Object.Env -> String -> IO (Object.Env)
 innerProcess oenv line = do
-    (obj, env) <- eval oenv line
-    case obj of
-        Object.Null -> pure ()
-        others -> printLine . dprint $ others
-    replLoop env
+    evalResult <- eval oenv line
+    case evalResult of
+        Left errs -> do
+            mapM_ printLine errs
+            pure oenv
+        Right (Object.Null, env) -> pure env
+        Right (others, env) -> do
+            printLine . dprint $ others
+            pure env

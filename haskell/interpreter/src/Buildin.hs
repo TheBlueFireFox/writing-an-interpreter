@@ -40,7 +40,8 @@ first :: [Object.Object] -> IO Object.Object
 first = pure . inner
   where
     inner [arg] = case arg of
-        Object.ArrObj s -> head s
+        Object.ArrObj [] -> Object.ErrObj $ printf "Array Object List empty"
+        Object.ArrObj (x : _) -> x
         other -> Object.ErrObj $ printf "argument to \"first\" must be ARRAY, got %s" $ Object.typeObject other
     inner d = Object.ErrObj $ printf "wrong number of arguments. got=%d, want=1" $ length d
 

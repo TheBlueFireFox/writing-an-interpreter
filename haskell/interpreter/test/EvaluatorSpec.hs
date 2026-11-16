@@ -1,7 +1,5 @@
 module EvaluatorSpec (spec) where
 
-import Test.Hspec
-
 import Ast (Expression (..), Statement (..))
 import Data.Bifunctor (Bifunctor (bimap), first)
 import Data.HashMap.Strict (fromList)
@@ -9,6 +7,7 @@ import Environment (newEnv)
 import Evaluator (evalProgram)
 import Object qualified
 import Parser (parse)
+import Test.Hspec
 
 spec :: Spec
 spec = do
@@ -28,15 +27,15 @@ spec = do
 
 testEval :: String -> IO Object.Object
 testEval input = case parse input of
-    Left err -> error $ head err
+    Left [] -> error "Token empty"
+    Left (current : _) -> error current
     Right prog -> fst <$> ((`evalProgram` prog) =<< newEnv)
 
 testIntegerObj :: SpecWith ()
 testIntegerObj = do
     describe "TestIntergerObject" $ do
         it "simple integer" $ do
-            let
-                input =
+            let input =
                     [ "5"
                     , "10"
                     ]
@@ -47,8 +46,7 @@ testIntegerObj = do
             t <- mapM testEval input
             t `shouldBe` expected
         it "negation" $ do
-            let
-                input =
+            let input =
                     ["-5", "-10"]
                 expected =
                     [Object.IntObj (-5), Object.IntObj (-10)]
@@ -56,8 +54,7 @@ testIntegerObj = do
             t <- mapM testEval input
             t `shouldBe` expected
         it "evaluation" $ do
-            let
-                rawInput =
+            let rawInput =
                     [ ("5 + 5 + 5 + 5 - 10", 10)
                     , ("2 * 2 * 2 * 2 * 2", 32)
                     , ("-50 + 100 + -50", 0)
@@ -78,8 +75,7 @@ testBoolObj :: SpecWith ()
 testBoolObj = do
     describe "TestBoolenObj" $ do
         it "simple bool" $ do
-            let
-                input =
+            let input =
                     [ "true"
                     , "false"
                     ]
@@ -90,8 +86,7 @@ testBoolObj = do
             t <- mapM testEval input
             t `shouldBe` expected
         it "evaluation bool" $ do
-            let
-                rawInput =
+            let rawInput =
                     [ ("true", True)
                     , ("false", False)
                     , ("true == true", True)
@@ -105,8 +100,7 @@ testBoolObj = do
             t <- mapM testEval input
             t `shouldBe` map Object.BoolObj expected
         it "evaluation Integer" $ do
-            let
-                rawInput =
+            let rawInput =
                     [ ("1 < 2", True)
                     , ("1 > 2", False)
                     , ("1 < 1", False)
@@ -125,14 +119,12 @@ testStrObj :: SpecWith ()
 testStrObj =
     describe "TestStrObj" $ do
         it "simple Hello World!" $ do
-            let
-                input = "\"Hello World!\""
+            let input = "\"Hello World!\""
                 expected = Object.StrObj "Hello World!"
             t <- testEval input
             t `shouldBe` expected
         it "concatination" $ do
-            let
-                input = "\"Hello\" + \" \" + \"World!\""
+            let input = "\"Hello\" + \" \" + \"World!\""
                 expected = Object.StrObj "Hello World!"
             t <- testEval input
             t `shouldBe` expected
@@ -141,8 +133,7 @@ testBangObj :: SpecWith ()
 testBangObj = do
     describe "TestBangObj" $ do
         it "bang all" $ do
-            let
-                lst =
+            let lst =
                     [ ("!true", False)
                     , ("!false", True)
                     , ("!5", False)
@@ -159,8 +150,7 @@ testIfElse :: SpecWith ()
 testIfElse = do
     describe "TestIfElse" $ do
         it "all" $ do
-            let
-                lst =
+            let lst =
                     [ ("if (true) { 10 }", Object.IntObj 10)
                     , ("if (false) { 10 }", Object.Null)
                     , ("if (1) { 10 }", Object.IntObj 10)
@@ -178,8 +168,7 @@ testArray :: SpecWith ()
 testArray = do
     describe "TestArray" $ do
         it "overview" $ do
-            let
-                input = "[1, 2 * 2, 3 + 3]"
+            let input = "[1, 2 * 2, 3 + 3]"
                 expected =
                     Object.ArrObj
                         [ Object.IntObj v | v <- [1, 4, 6]
@@ -187,8 +176,7 @@ testArray = do
             g <- testEval input
             g `shouldBe` expected
         it "index expressions" $ do
-            let
-                lst =
+            let lst =
                     [ ("[1, 2, 3][0]", Object.IntObj 1)
                     , ("[1, 2, 3][1]", Object.IntObj 2)
                     , ("[1, 2, 3][2]", Object.IntObj 3)
@@ -215,8 +203,7 @@ testReturn :: SpecWith ()
 testReturn = do
     describe "TestReturn" $ do
         it "overview" $ do
-            let
-                lst =
+            let lst =
                     [ ("return 10;", Object.IntObj 10)
                     , ("return 10; 9;", Object.IntObj 10)
                     , ("return 2 * 5; 9;", Object.IntObj 10)
@@ -227,8 +214,7 @@ testReturn = do
             g <- sequence got
             g `shouldBe` expected
         it "blockStatements" $ do
-            let
-                input = "if (10 > 1) { if (10 > 1) { return 10; } return 1; }"
+            let input = "if (10 > 1) { if (10 > 1) { return 10; } return 1; }"
                 expected = Object.IntObj 10
             t <- testEval input
             t `shouldBe` expected
@@ -237,8 +223,7 @@ testErrorHandling :: SpecWith ()
 testErrorHandling = do
     describe "TestErrorHandling" $ do
         it "overview" $ do
-            let
-                lst =
+            let lst =
                     [ ("5 + true;", "type mismatch: INTEGER + BOOLEAN")
                     , ("5 + true; 5;", "type mismatch: INTEGER + BOOLEAN")
                     , ("-true", "unknown operator: -BOOLEAN")
@@ -254,8 +239,7 @@ testErrorHandling = do
             g <- sequence got
             g `shouldBe` expected
         it "identifiers" $ do
-            let
-                lst = [("foobar", "identifier not found: foobar")]
+            let lst = [("foobar", "identifier not found: foobar")]
                 process = bimap testEval Object.ErrObj
                 (got, expected) = unzip . map process $ lst
             g <- sequence got
@@ -265,8 +249,7 @@ testLet :: SpecWith ()
 testLet = do
     describe "TestLetStatement" $ do
         it "overview" $ do
-            let
-                lst =
+            let lst =
                     [ ("let a = 5; a;", 5)
                     , ("let a = 5 * 5; a;", 25)
                     , ("let a = 5; let b = a; b;", 5)
@@ -281,12 +264,10 @@ testFun :: SpecWith ()
 testFun = do
     describe "TestFunctionStatement" $ do
         it "simple" $ do
-            let
-                input = "fn(x) { x + 2; };"
+            let input = "fn(x) { x + 2; };"
                 blk =
                     [ ExpressionStatement
-                        ( AddExpr (IdentExpr "x") (IntegerExpr 2)
-                        )
+                        (AddExpr (IdentExpr "x") (IntegerExpr 2))
                     ]
                 eparams = [IdentExpr "x"]
                 ebody = BlockStatement blk
@@ -300,8 +281,7 @@ testFun = do
             params `shouldBe` eparams
             body `shouldBe` ebody
         it "overview" $ do
-            let
-                lst =
+            let lst =
                     [ ("let identity = fn(x) { x; }; identity(5);", 5)
                     , ("let identity = fn(x) { return x; }; identity(5);", 5)
                     , ("let double = fn(x) { x * 2; }; double(5);", 10)
@@ -314,8 +294,7 @@ testFun = do
             g <- sequence got
             g `shouldBe` expected
         it "closures" $ do
-            let
-                input = "let newAdder = fn(x) { fn(y) { x + y }; }; let addTwo = newAdder(2); addTwo(2)"
+            let input = "let newAdder = fn(x) { fn(y) { x + y }; }; let addTwo = newAdder(2); addTwo(2)"
                 expected = Object.IntObj 4
             t <- testEval input
             t `shouldBe` expected
@@ -324,8 +303,7 @@ testBuildIns :: SpecWith ()
 testBuildIns =
     describe "TestBuildIns" $ do
         it "len" $ do
-            let
-                lst =
+            let lst =
                     [ ("len(\"\")", Object.IntObj 0)
                     , ("len(\"four\")", Object.IntObj 4)
                     , ("len(\"hello world\")", Object.IntObj 11)
@@ -341,8 +319,7 @@ testDrivingArrays :: SpecWith ()
 testDrivingArrays =
     describe "TestDrivingArrays" $ do
         it "map -- simple" $ do
-            let
-                inputMap =
+            let inputMap =
                     "\
                     \let iter = fn(i) {                                 \
                     \   if(i > 0) {                                     \
@@ -359,8 +336,7 @@ testDrivingArrays =
             got <- testEval input
             got `shouldBe` expected
         it "map -- function in function" $ do
-            let
-                inputMap =
+            let inputMap =
                     "\
                     \let map = fn(arr, f) {                                         \
                     \   let iter = fn(arr, accumulated) {                           \
@@ -382,8 +358,7 @@ testDrivingArrays =
             got <- testEval input
             got `shouldBe` expected
         it "reduce" $ do
-            let
-                reduceFn =
+            let reduceFn =
                     " \
                     \let reduce = fn(arr, initial, f) {                             \
                     \    let iter = fn(arr, result) {                               \
@@ -412,15 +387,13 @@ testDrivingArrays =
 
 testHashLiterals :: SpecWith ()
 testHashLiterals = do
-    let
-        str = Object.StrObj
+    let str = Object.StrObj
         int = Object.IntObj
         bool = Object.BoolObj
         nil = Object.Null
     describe "TestHashLiterals" $ do
         it "eveluate complex hash literal" $ do
-            let
-                input =
+            let input =
                     "\
                     \   let two = \"two\";                             \
                     \   {                                              \
@@ -445,8 +418,7 @@ testHashLiterals = do
             got `shouldBe` expected
     describe "TestHashIndexExpressions" $ do
         it "list of examples" $ do
-            let
-                input =
+            let input =
                     [ ("{\"foo\": 5}[\"foo\"]", int 5)
                     , ("{\"foo\": 5}[\"bar\"]", nil)
                     , ("let key = \"foo\"; {\"foo\": 5}[key]", int 5)

@@ -1,6 +1,6 @@
 module AstSpec (spec) where
 
-import Ast (Expression (IdentExpr), Program (Program), Statement (LetStatement), Display(dprint))
+import Ast (Display (dprint), Expression (IdentExpr), Program (Program), Statement (LetStatement))
 import Test.Hspec (Spec, describe, it, shouldBe)
 
 spec :: Spec
