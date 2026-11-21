@@ -1,4 +1,4 @@
-module Lexer (Lexer, new, tokenize, run) where
+module Lexer (run) where
 
 import Control.Applicative (Alternative ((<|>)))
 import Control.Arrow (Arrow (first, second))
@@ -19,6 +19,7 @@ new = Lexer
 tokenize :: Lexer -> ([TokenType], Lexer)
 tokenize = inner []
   where
+    inner :: [TokenType] -> Lexer -> ([TokenType], Lexer)
     inner (Illegal v : _) _ = error $ "Illegal character -- " ++ v
     inner acc@(Eof : _) l = (reverse acc, l)
     inner acc l = uncurry inner . swap . second (: acc) . nextToken $ l

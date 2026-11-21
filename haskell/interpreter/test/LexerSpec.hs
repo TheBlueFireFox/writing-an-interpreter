@@ -1,6 +1,6 @@
 module LexerSpec (spec) where
 
-import Lexer (new, tokenize)
+import Lexer (run)
 import Test.Hspec (Spec, SpecWith, describe, it, shouldBe)
 import Token (TokenType (..))
 
@@ -12,9 +12,6 @@ spec = do
         testNextTokenMoreSymbols
         testNextTokenAllKeywords
         testNextTokenComplete
-
-run :: String -> [TokenType]
-run = fst . tokenize . new
 
 testNextTokenSimple :: SpecWith ()
 testNextTokenSimple =
