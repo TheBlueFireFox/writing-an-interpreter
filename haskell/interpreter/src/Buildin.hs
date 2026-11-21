@@ -2,7 +2,7 @@ module Buildin (globalEnvironment) where
 
 import Ast (dprint)
 import Control.Arrow (Arrow (second))
-import Data.List (intercalate, uncons, unsnoc)
+import Data.List (uncons, unsnoc)
 import Environment qualified as Env
 import Object qualified
 import Text.Printf
@@ -49,36 +49,29 @@ blast = pure . arrayHelper "last" inner
   where
     inner = maybe arrayEmptyErr snd . unsnoc
 
-arrayEmptyErr :: Object.Object
-arrayEmptyErr = Object.ErrObj "Array Object List empty"
+rest :: [Object.Object] -> IO Object.Object
+rest = pure . arrayHelper "rest" inner
+  where
+    inner = maybe arrayEmptyErr (Object.ArrObj . snd) . uncons
 
-arrayHelper :: (PrintfArg p) => p -> ([Object.Object] -> Object.Object) -> [Object.Object] -> Object.Object
+push :: [Object.Object] -> IO Object.Object
+push = pure . inner
+  where
+    inner [Object.ArrObj x, obj] = Object.ArrObj (x ++ [obj])
+    inner [other, _] = Object.ErrObj $ printf "first argument to \"push\" must be ARRAY, got %s" $ Object.typeObject other
+    inner d = Object.ErrObj $ printf "wrong number of arguments. got=%d, want=2" $ length d
+
+arrayEmptyErr :: Object.Object
+arrayEmptyErr = Object.ErrObj "ARRAY object list empty"
+
+arrayHelper :: String -> ([Object.Object] -> Object.Object) -> [Object.Object] -> Object.Object
 arrayHelper name fn = inner
   where
     inner [Object.ArrObj arg] = fn arg
     inner [other] = Object.ErrObj $ printf "argument to \"%s\" must be ARRAY, got %s" name $ Object.typeObject other
     inner d = Object.ErrObj $ printf "wrong number of arguments. got=%d, want=1" $ length d
 
-rest :: [Object.Object] -> IO Object.Object
-rest = pure . inner
-  where
-    inner [arg] = case arg of
-        Object.ArrObj (_ : xs) -> Object.ArrObj xs
-        Object.ArrObj [] -> Object.Null
-        other -> Object.ErrObj $ printf "argument to \"rest\" must be ARRAY, got %s" $ Object.typeObject other
-    inner d = Object.ErrObj $ printf "wrong number of arguments. got=%d, want=1" $ length d
-
-push :: [Object.Object] -> IO Object.Object
-push = pure . inner
-  where
-    inner [arr, obj] = case arr of
-        Object.ArrObj x -> Object.ArrObj (x ++ [obj])
-        other -> Object.ErrObj $ printf "argument to \"push\" must be ARRAY, got %s" $ Object.typeObject other
-    inner d = Object.ErrObj $ printf "wrong number of arguments. got=%d, want=2" $ length d
-
 puts :: [Object.Object] -> IO Object.Object
-puts [] = do
-    pure Object.Null
 puts objs = do
-    putStrLn $ intercalate "\n" $ map dprint objs
+    mapM_ (putStrLn . dprint) objs
     pure Object.Null
