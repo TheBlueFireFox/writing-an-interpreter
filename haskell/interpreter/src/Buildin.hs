@@ -2,7 +2,7 @@ module Buildin (globalEnvironment) where
 
 import Ast (dprint)
 import Control.Arrow (Arrow (second))
-import Data.List (intercalate)
+import Data.List (intercalate, uncons, unsnoc)
 import Environment qualified as Env
 import Object qualified
 import Text.Printf
@@ -40,20 +40,23 @@ len = pure . inner
     genInt = Object.IntObj . fromIntegral . length
 
 first :: [Object.Object] -> IO Object.Object
-first = pure . inner
+first = pure . arrayHelper "first" inner
   where
-    inner [arg] = case arg of
-        Object.ArrObj [] -> Object.ErrObj $ printf "Array Object List empty"
-        Object.ArrObj (x : _) -> x
-        other -> Object.ErrObj $ printf "argument to \"first\" must be ARRAY, got %s" $ Object.typeObject other
-    inner d = Object.ErrObj $ printf "wrong number of arguments. got=%d, want=1" $ length d
+    inner = maybe arrayEmptyErr fst . uncons
 
 blast :: [Object.Object] -> IO Object.Object
-blast = pure . inner
+blast = pure . arrayHelper "last" inner
   where
-    inner [arg] = case arg of
-        Object.ArrObj s -> last s
-        other -> Object.ErrObj $ printf "argument to \"last\" must be ARRAY, got %s" $ Object.typeObject other
+    inner = maybe arrayEmptyErr snd . unsnoc
+
+arrayEmptyErr :: Object.Object
+arrayEmptyErr = Object.ErrObj "Array Object List empty"
+
+arrayHelper :: (PrintfArg p) => p -> ([Object.Object] -> Object.Object) -> [Object.Object] -> Object.Object
+arrayHelper name fn = inner
+  where
+    inner [Object.ArrObj arg] = fn arg
+    inner [other] = Object.ErrObj $ printf "argument to \"%s\" must be ARRAY, got %s" name $ Object.typeObject other
     inner d = Object.ErrObj $ printf "wrong number of arguments. got=%d, want=1" $ length d
 
 rest :: [Object.Object] -> IO Object.Object
