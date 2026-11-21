@@ -61,7 +61,7 @@ evalExpression env expr =
         Ast.AddExpr l r -> evalAddExpr env l r
         Ast.MinExpr l r -> evalTwoInt env Object.IntObj (-) "-" l r
         Ast.MulExpr l r -> evalTwoInt env Object.IntObj (*) "*" l r
-        Ast.DivExpr l r -> evalTwoInt env Object.IntObj div "/" l r
+        Ast.DivExpr l r -> evalTwoInt env id evalTwoDiv "/" l r
         Ast.LeExpr l r -> evalTwoInt env Object.BoolObj (<) "<" l r
         Ast.GtExpr l r -> evalTwoInt env Object.BoolObj (>) ">" l r
         Ast.EqExpr l r -> evalEqExpr env l r
@@ -111,6 +111,10 @@ evalTwoExpr fn env left right = do
 
 evalOne :: Object.Env -> (Object.Object -> b) -> Ast.Expression -> IO b
 evalOne env fun val = fun <$> evalExpression env val
+
+evalTwoDiv :: Int64 -> Int64 -> Object.Object
+evalTwoDiv _ 0 = Object.ErrObj "Division By Zero"
+evalTwoDiv l r = Object.IntObj $ div l r
 
 evalTwoInt ::
     Object.Env ->

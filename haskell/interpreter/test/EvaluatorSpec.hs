@@ -70,6 +70,14 @@ testIntegerObj = do
                 (input, expected) = unzip rawInput
             t <- mapM testEval input
             t `shouldBe` map Object.IntObj expected
+        it "evaluate division" $ do
+            let rawInput =
+                    [ ("2/1", Object.IntObj 2)
+                    , ("1/0", Object.ErrObj "Division By Zero")
+                    ]
+                (input, expected) = unzip rawInput
+            t <- mapM testEval input
+            t `shouldBe` expected
 
 testBoolObj :: SpecWith ()
 testBoolObj = do
