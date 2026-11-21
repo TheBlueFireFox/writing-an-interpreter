@@ -27,7 +27,7 @@ spec = do
 
 testEval :: String -> IO Object.Object
 testEval input = case parse input of
-    Left [] -> error "Token empty"
+    Left [] -> pure $ Object.ErrObj "Token empty"
     Left (current : _) -> error current
     Right prog -> fst <$> ((`evalProgram` prog) =<< globalEnvironment)
 

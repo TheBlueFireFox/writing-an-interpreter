@@ -1,6 +1,5 @@
 module Evaluator (evalProgram) where
 
-import Ast (Display (dprint))
 import Ast qualified
 import Control.Arrow (first)
 import Control.Monad (foldM)
@@ -203,7 +202,7 @@ evalCallExpr fn args env = do
         (_, [err@(Object.ErrObj _)]) -> pure err
         (Object.FnObj params body fnEnv, args') -> applyFn params body fnEnv args'
         (Object.BuiObj fn', args') -> fn' args'
-        (l, _) -> error $ "not a function: " ++ dprint l
+        (l, _) -> pure $ Object.ErrObj $ "not a function: " ++ Object.typeObject l
 
 evalExpressions :: Env.Env Object.Object -> [Ast.Expression] -> IO [Object.Object]
 evalExpressions env = inner []
