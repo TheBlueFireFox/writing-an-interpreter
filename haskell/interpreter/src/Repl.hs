@@ -1,8 +1,8 @@
 module Repl (runner) where
 
 import Ast (Display (dprint))
+import Buildin qualified as Builtin
 import Control.Monad.IO.Class (liftIO)
-import Environment qualified as Env
 import Evaluator (evalProgram)
 import Object qualified
 import Parser (parse)
@@ -15,7 +15,7 @@ runner :: IO ()
 runner = do
     putStrLn "Hello! This is the Monkey programming language!"
     putStrLn "Feel free to type in commands"
-    runInputT defaultSettings (replLoop =<< liftIO Env.newEnv)
+    runInputT defaultSettings (replLoop =<< liftIO Builtin.parentEnv)
 
 replLoop :: Object.Env -> InputT IO ()
 replLoop env = do

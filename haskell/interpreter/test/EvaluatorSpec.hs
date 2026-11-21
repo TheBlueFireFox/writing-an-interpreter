@@ -1,9 +1,9 @@
 module EvaluatorSpec (spec) where
 
 import Ast (Expression (..), Statement (..))
+import Buildin qualified as Builtin
 import Data.Bifunctor (Bifunctor (bimap), first)
 import Data.HashMap.Strict (fromList)
-import Environment (newEnv)
 import Evaluator (evalProgram)
 import Object qualified
 import Parser (parse)
@@ -29,7 +29,7 @@ testEval :: String -> IO Object.Object
 testEval input = case parse input of
     Left [] -> error "Token empty"
     Left (current : _) -> error current
-    Right prog -> fst <$> ((`evalProgram` prog) =<< newEnv)
+    Right prog -> fst <$> ((`evalProgram` prog) =<< Builtin.parentEnv)
 
 testIntegerObj :: SpecWith ()
 testIntegerObj = do
@@ -271,7 +271,6 @@ testFun = do
                     ]
                 eparams = [IdentExpr "x"]
                 ebody = BlockStatement blk
-            -- expected <- Object.FnObj [IdentExpr "x"] (BlockStatement blk) <$> Environment.newEnv
             t <- testEval input
             -- direct comparison doesn't work as the Environment.Env is a IORef and the Eq
             -- for that uses pointer equality (not very useful here)
