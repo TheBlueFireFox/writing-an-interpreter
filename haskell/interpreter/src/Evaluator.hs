@@ -2,10 +2,8 @@ module Evaluator (evalProgram) where
 
 import Ast (Display (dprint))
 import Ast qualified
-import Buildin qualified
-import Control.Applicative ((<|>))
 import Control.Arrow (first)
-import Control.Monad (foldM, liftM2)
+import Control.Monad (foldM)
 import Data.Either (partitionEithers)
 import Data.HashMap.Strict (HashMap, fromList, (!?))
 import Data.Int (Int64)
@@ -157,10 +155,9 @@ evalNeqExpr = evalTwoExpr fn
             (l, r) -> checkOps l r "!="
 
 evalIdent :: Object.Env -> String -> IO Object.Object
-evalIdent env name = fromMaybe fallback <$> get
+evalIdent env name = fromMaybe fallback <$> Env.getEnv env name
   where
     fallback = Object.ErrObj $ "identifier not found: " ++ name
-    get = liftM2 (<|>) (Env.getEnv env name) ((`Env.getEnv` name) =<< Buildin.parentEnv)
 
 evalIfExpr ::
     Object.Env ->
