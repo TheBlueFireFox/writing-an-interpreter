@@ -39,7 +39,7 @@ nextToken l@(Lexer input) = first (advanceLexer l) <$> runHelper input
 
     parser v len =
         case second (+ len) <$> parseClean v of
-            Nothing -> (Left [illegalChar v])
+            Nothing -> Left [illegalChar v]
             Just val -> Right val
 
     illegalChar (c : _) = "Illegal character -- " ++ [c]

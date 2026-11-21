@@ -4,6 +4,7 @@ import Ast (Expression (..), Statement (..))
 import Buildin (globalEnvironment)
 import Data.Bifunctor (Bifunctor (bimap), first)
 import Data.HashMap.Strict (fromList)
+import Data.Int (Int64)
 import Evaluator (evalProgram)
 import Object qualified
 import Parser (parse)
@@ -27,7 +28,7 @@ spec = do
 
 testEval :: String -> IO Object.Object
 testEval input = case parse input of
-    Left [] -> pure $ Object.ErrObj "Token empty"
+    Left [] -> error "Token empty"
     Left (current : _) -> error current
     Right prog -> fst <$> ((`evalProgram` prog) =<< globalEnvironment)
 
@@ -73,7 +74,9 @@ testIntegerObj = do
         it "evaluate division" $ do
             let rawInput =
                     [ ("2/1", Object.IntObj 2)
-                    , ("1/0", Object.ErrObj "Division By Zero")
+                    , ("-7/2", Object.IntObj (-3))
+                    , ("1/0", Object.ErrObj "division by zero")
+                    , (show (minBound :: Int64) ++ "/-1", Object.ErrObj "arithmetic overflow")
                     ]
                 (input, expected) = unzip rawInput
             t <- mapM testEval input
@@ -247,7 +250,10 @@ testErrorHandling = do
             g <- sequence got
             g `shouldBe` expected
         it "identifiers" $ do
-            let lst = [("foobar", "identifier not found: foobar")]
+            let lst =
+                    [ ("foobar", "identifier not found: foobar")
+                    , ("x(){}", "identifier not found: x")
+                    ]
                 process = bimap testEval Object.ErrObj
                 (got, expected) = unzip . map process $ lst
             g <- sequence got
@@ -287,13 +293,20 @@ testFun = do
                     _ -> error "incorrect type"
             params `shouldBe` eparams
             body `shouldBe` ebody
-        it "correct amount of arguments" $ do
+        it "incorrect amount of arguments" $ do
             let lst =
-                    [ "fn(x, y) { x + y }(1)"
-                    , "fn(x) { x }(1, 2)"
+                    [ ("fn(x, y) { x + y }(1)", "wrong number of arguments. got=1, want=2")
+                    , ("fn(x) { x }(1, 2)", "wrong number of arguments. got=2, want=1")
                     ]
-                expectedErr = Object.ErrObj "Incorrect amount of parameter"
-                process = (,expectedErr) . testEval
+                process = bimap testEval Object.ErrObj
+                (got, expected) = unzip . map process $ lst
+            g <- sequence got
+            g `shouldBe` expected
+        it "invalid expression" $ do
+            let lst =
+                    [ ("5(){}", "not a function: INTEGER")
+                    ]
+                process = bimap testEval Object.ErrObj
                 (got, expected) = unzip . map process $ lst
             g <- sequence got
             g `shouldBe` expected
@@ -326,6 +339,54 @@ testBuildIns =
                     , ("len(\"hello world\")", Object.IntObj 11)
                     , ("len(1)", Object.ErrObj "argument to \"len\" not supported, got INTEGER")
                     , ("len(\"one\", \"two\")", Object.ErrObj "wrong number of arguments. got=2, want=1")
+                    ]
+                process = first testEval
+                (got, expected) = unzip . map process $ lst
+            g <- sequence got
+            g `shouldBe` expected
+        it "first" $ do
+            let lst =
+                    [ ("first([2])", Object.IntObj 2)
+                    , ("first([2, 4])", Object.IntObj 2)
+                    , ("first([])", Object.ErrObj "ARRAY object list empty")
+                    , ("first(1)", Object.ErrObj "argument to \"first\" must be ARRAY, got INTEGER")
+                    , ("first(1, 3)", Object.ErrObj "wrong number of arguments. got=2, want=1")
+                    ]
+                process = first testEval
+                (got, expected) = unzip . map process $ lst
+            g <- sequence got
+            g `shouldBe` expected
+        it "rest" $ do
+            let lst =
+                    [ ("rest([2])", Object.ArrObj [])
+                    , ("rest([2, 4])", Object.ArrObj [Object.IntObj 4])
+                    , ("rest([])", Object.ErrObj "ARRAY object list empty")
+                    , ("rest(1)", Object.ErrObj "argument to \"rest\" must be ARRAY, got INTEGER")
+                    , ("rest(1, 3)", Object.ErrObj "wrong number of arguments. got=2, want=1")
+                    ]
+                process = first testEval
+                (got, expected) = unzip . map process $ lst
+            g <- sequence got
+            g `shouldBe` expected
+        it "last" $ do
+            let lst =
+                    [ ("last([4])", Object.IntObj 4)
+                    , ("last([2, 4])", Object.IntObj 4)
+                    , ("last([])", Object.ErrObj "ARRAY object list empty")
+                    , ("last(1)", Object.ErrObj "argument to \"last\" must be ARRAY, got INTEGER")
+                    , ("last(1, 3)", Object.ErrObj "wrong number of arguments. got=2, want=1")
+                    ]
+                process = first testEval
+                (got, expected) = unzip . map process $ lst
+            g <- sequence got
+            g `shouldBe` expected
+        it "push" $ do
+            let lst =
+                    [ ("push([], 2)", Object.ArrObj [Object.IntObj 2])
+                    , ("push([4], 2)", Object.ArrObj [Object.IntObj 4, Object.IntObj 2])
+                    , ("push([4], [2])", Object.ArrObj [Object.IntObj 4, Object.ArrObj [Object.IntObj 2]])
+                    , ("push(1, 3)", Object.ErrObj "first argument to \"push\" must be ARRAY, got INTEGER")
+                    , ("push([])", Object.ErrObj "wrong number of arguments. got=1, want=2")
                     ]
                 process = first testEval
                 (got, expected) = unzip . map process $ lst

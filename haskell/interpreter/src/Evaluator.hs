@@ -10,6 +10,7 @@ import Data.List (genericIndex)
 import Data.Maybe (fromMaybe)
 import Environment qualified as Env
 import Object qualified
+import Text.Printf (printf)
 
 evalProgram :: Object.Env -> Ast.Program -> IO (Object.Object, Object.Env)
 evalProgram env (Ast.Program statements) = inner env Object.Null statements
@@ -112,8 +113,10 @@ evalOne :: Object.Env -> (Object.Object -> b) -> Ast.Expression -> IO b
 evalOne env fun val = fun <$> evalExpression env val
 
 evalTwoDiv :: Int64 -> Int64 -> Object.Object
-evalTwoDiv _ 0 = Object.ErrObj "Division By Zero"
-evalTwoDiv l r = Object.IntObj $ div l r
+evalTwoDiv l r
+    | r == 0 = Object.ErrObj "division by zero"
+    | l == minBound && r == (-1) = Object.ErrObj "arithmetic overflow"
+    | otherwise = Object.IntObj $ quot l r
 
 evalTwoInt ::
     Object.Env ->
@@ -216,13 +219,16 @@ evalExpressions env = inner []
 
 applyFn :: [Ast.Expression] -> Ast.Statement -> Object.Env -> [Object.Object] -> IO Object.Object
 applyFn params body fnEnv args
-    | length params /= length args = pure $ Object.ErrObj "Incorrect amount of parameter"
+    | lenParams /= lenArgs = pure $ Object.ErrObj $ printf "wrong number of arguments. got=%d, want=%d" lenArgs lenParams
     | otherwise = do
         efn <- extendFnEnv params fnEnv args
         b <- evalStatement efn body
         pure $ case b of
             (Object.RetObj v, _) -> v
             (other, _) -> other
+  where
+    lenParams = length params
+    lenArgs = length args
 
 extendFnEnv :: [Ast.Expression] -> Env.Env a -> [a] -> IO (Env.Env a)
 extendFnEnv params fnEnv args = do
