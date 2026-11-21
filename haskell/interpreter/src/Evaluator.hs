@@ -215,12 +215,14 @@ evalExpressions env = inner []
         obj -> inner (obj : acc) cs
 
 applyFn :: [Ast.Expression] -> Ast.Statement -> Object.Env -> [Object.Object] -> IO Object.Object
-applyFn params body fnEnv args = do
-    efn <- extendFnEnv params fnEnv args
-    b <- evalStatement efn body
-    pure $ case b of
-        (Object.RetObj v, _) -> v
-        (other, _) -> other
+applyFn params body fnEnv args
+    | length params /= length args = pure $ Object.ErrObj "Incorrect amount of parameter"
+    | otherwise = do
+        efn <- extendFnEnv params fnEnv args
+        b <- evalStatement efn body
+        pure $ case b of
+            (Object.RetObj v, _) -> v
+            (other, _) -> other
 
 extendFnEnv :: [Ast.Expression] -> Env.Env a -> [a] -> IO (Env.Env a)
 extendFnEnv params fnEnv args = do

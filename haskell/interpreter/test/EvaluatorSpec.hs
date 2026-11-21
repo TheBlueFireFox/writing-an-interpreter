@@ -287,6 +287,16 @@ testFun = do
                     _ -> error "incorrect type"
             params `shouldBe` eparams
             body `shouldBe` ebody
+        it "correct amount of arguments" $ do
+            let lst =
+                    [ "fn(x, y) { x + y }(1)"
+                    , "fn(x) { x }(1, 2)"
+                    ]
+                expectedErr = Object.ErrObj "Incorrect amount of parameter"
+                process = (,expectedErr) . testEval
+                (got, expected) = unzip . map process $ lst
+            g <- sequence got
+            g `shouldBe` expected
         it "overview" $ do
             let lst =
                     [ ("let identity = fn(x) { x; }; identity(5);", 5)
