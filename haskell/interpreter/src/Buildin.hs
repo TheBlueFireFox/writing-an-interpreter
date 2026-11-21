@@ -77,6 +77,8 @@ push = pure . inner
     inner d = Object.ErrObj $ printf "wrong number of arguments. got=%d, want=2" $ length d
 
 puts :: [Object.Object] -> IO Object.Object
+puts [] = do
+    pure Object.Null
 puts objs = do
     putStrLn $ intercalate "\n" $ map dprint objs
     pure Object.Null
