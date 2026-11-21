@@ -22,6 +22,21 @@ spec = do
     testFunctionLitteralExpression
     testCallExpression
     testHashLiteralExpression
+    testIllegalToken
+
+testIllegalToken :: SpecWith ()
+testIllegalToken =
+    describe "Illegal Token" $ do
+        it "at the beginning" $ do
+            let
+                input = "@"
+                expected = Left ["Illegal character -- @"]
+            parse input `shouldBe` expected
+        it "the middle of function" $ do
+            let
+                input = "fn() { @ }"
+                expected = Left ["Illegal character -- @"]
+            parse input `shouldBe` expected
 
 testLetStatements :: SpecWith ()
 testLetStatements =

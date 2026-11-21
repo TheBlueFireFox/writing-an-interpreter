@@ -12,6 +12,7 @@ spec = do
         testNextTokenMoreSymbols
         testNextTokenAllKeywords
         testNextTokenComplete
+        testIllegalToken
 
 testNextTokenSimple :: SpecWith ()
 testNextTokenSimple =
@@ -29,7 +30,21 @@ testNextTokenSimple =
                 , Semicolon
                 , Eof
                 ]
-        run input `shouldBe` expected
+        run input `shouldBe` Right expected
+
+testIllegalToken :: SpecWith ()
+testIllegalToken =
+    describe "Illegal Token" $ do
+        it "at the beginning" $ do
+            let
+                input = "@"
+                expected = Left ["Illegal character -- @"]
+            run input `shouldBe` expected
+        it "the middle of function" $ do
+            let
+                input = "fn() { @ }"
+                expected = Left ["Illegal character -- @"]
+            run input `shouldBe` expected
 
 testMissingTokens :: SpecWith ()
 testMissingTokens =
@@ -83,7 +98,7 @@ testMissingTokens =
                 , Semicolon
                 , Eof
                 ]
-        run input `shouldBe` expected
+        run input `shouldBe` Right expected
 
 testNextTokenMoreSymbols :: SpecWith ()
 testNextTokenMoreSymbols =
@@ -152,7 +167,7 @@ testNextTokenMoreSymbols =
                 , Semicolon
                 , Eof
                 ]
-        run input `shouldBe` expected
+        run input `shouldBe` Right expected
 
 testNextTokenAllKeywords :: SpecWith ()
 testNextTokenAllKeywords =
@@ -243,7 +258,7 @@ testNextTokenAllKeywords =
                 , RBrace
                 , Eof
                 ]
-        run input `shouldBe` expected
+        run input `shouldBe` Right expected
 
 testNextTokenComplete :: SpecWith ()
 testNextTokenComplete =
@@ -363,4 +378,4 @@ testNextTokenComplete =
                 , RBrace
                 , Eof
                 ]
-        run input `shouldBe` expected
+        run input `shouldBe` Right expected

@@ -3,8 +3,7 @@ module Token (TokenType (..)) where
 import Data.Int (Int64)
 
 data TokenType
-    = Illegal String
-    | Eof
+    = Eof
     | -- Idenfitieres
       Ident String
     | Int Int64
