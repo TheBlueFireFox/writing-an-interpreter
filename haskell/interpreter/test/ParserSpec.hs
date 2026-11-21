@@ -346,20 +346,69 @@ testFunctionLitteralExpression =
         ident = Ast.IdentExpr
         es = Ast.ExpressionStatement
      in
-        describe "TestFuntionLitterals" $ it "simple function litterals" $ do
-            let
-                input = "fn(x, y) { x + y; }"
-                expected =
-                    Right . Ast.Program $
-                        [ es $
-                            Ast.FnExpr
-                                [ ident "x"
-                                , ident "y"
-                                ]
-                                (blk (Ast.AddExpr (ident "x") (ident "y")))
-                        ]
+        describe "TestFuntionLitterals" $ do
+            it "simple function no params" $ do
+                let
+                    input = "fn() { 2; }"
+                    expected =
+                        Right . Ast.Program $
+                            [ es $
+                                Ast.FnExpr
+                                    []
+                                    (blk (Ast.IntegerExpr 2))
+                            ]
 
-            parse input `shouldBe` expected
+                parse input `shouldBe` expected
+            it "simple function no params no body" $ do
+                let
+                    input = "fn() { }"
+                    expected =
+                        Right . Ast.Program $
+                            [ es $
+                                Ast.FnExpr
+                                    []
+                                    (Ast.BlockStatement [])
+                            ]
+                parse input `shouldBe` expected
+            it "simple function no params but whitespace" $ do
+                let
+                    input = "fn(  ) { 2; }"
+                    expected =
+                        Right . Ast.Program $
+                            [ es $
+                                Ast.FnExpr
+                                    []
+                                    (blk (Ast.IntegerExpr 2))
+                            ]
+
+                parse input `shouldBe` expected
+            it "simple function with params no body" $ do
+                let
+                    input = "fn(x, y) { }"
+                    expected =
+                        Right . Ast.Program $
+                            [ es $
+                                Ast.FnExpr
+                                    [ ident "x"
+                                    , ident "y"
+                                    ]
+                                    (Ast.BlockStatement [])
+                            ]
+                parse input `shouldBe` expected
+            it "simple function with params" $ do
+                let
+                    input = "fn(x, y) { x + y; }"
+                    expected =
+                        Right . Ast.Program $
+                            [ es $
+                                Ast.FnExpr
+                                    [ ident "x"
+                                    , ident "y"
+                                    ]
+                                    (blk (Ast.AddExpr (ident "x") (ident "y")))
+                            ]
+
+                parse input `shouldBe` expected
 
 testCallExpression :: SpecWith ()
 testCallExpression =
@@ -404,9 +453,9 @@ testHashLiteralExpression =
                 input = "{\"one\": 1, \"two\": 2, \"three\": 3}"
                 expected =
                     Right . Ast.Program $
-                        [ ex
-                            $ Ast.HashExpr
-                            $ map (bimap str int) [("one", 1), ("two", 2), ("three", 3)]
+                        [ ex $
+                            Ast.HashExpr $
+                                map (bimap str int) [("one", 1), ("two", 2), ("three", 3)]
                         ]
             parse input `shouldBe` expected
         it "parsing hash literals" $ do
@@ -414,13 +463,13 @@ testHashLiteralExpression =
                 input = "{\"one\": 0 + 1, \"two\": 10 - 8, \"three\": 15 / 5}"
                 expected =
                     Right . Ast.Program $
-                        [ ex
-                            $ Ast.HashExpr
-                            $ map
-                                (first str)
-                                [ ("one", Ast.AddExpr (int 0) (int 1))
-                                , ("two", Ast.MinExpr (int 10) (int 8))
-                                , ("three", Ast.DivExpr (int 15) (int 5))
-                                ]
+                        [ ex $
+                            Ast.HashExpr $
+                                map
+                                    (first str)
+                                    [ ("one", Ast.AddExpr (int 0) (int 1))
+                                    , ("two", Ast.MinExpr (int 10) (int 8))
+                                    , ("three", Ast.DivExpr (int 15) (int 5))
+                                    ]
                         ]
             parse input `shouldBe` expected

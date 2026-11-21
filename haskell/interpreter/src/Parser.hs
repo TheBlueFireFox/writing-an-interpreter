@@ -214,10 +214,11 @@ parseFnLit = inner
         (Ident ident : xs) -> Right (Ast.IdentExpr ident, xs)
         (x : _) -> Left ["Not a ident " ++ show x]
 
-    helperParseParamsPreCond (acc, toks) = case toks of
-        [] -> Left ["Emptry token list"]
-        (LParen : toks') -> helperParseParamsLoopCond . first (: acc) =<< helperIdentToks toks'
-        _ -> Left ["Weird token " ++ show toks]
+    helperParseParamsPreCond (acc, toks)
+        | [] <- toks = Left ["Emptry token list"]
+        | (LParen : rest@(RParen : _)) <- toks = Right ([], rest)
+        | (LParen : toks') <- toks = helperParseParamsLoopCond . first (: acc) =<< helperIdentToks toks'
+        | otherwise = Left ["Weird token " ++ show toks]
 
     helperParseParamsLoopCond (acc, toks)
         | [] <- toks = Left ["Emptry token list"]
