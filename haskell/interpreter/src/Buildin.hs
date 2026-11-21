@@ -1,11 +1,15 @@
-module Buildin (parentEnv) where
+module Buildin (globalEnvironment) where
 
 import Ast (dprint)
 import Control.Arrow (Arrow (second))
 import Data.List (intercalate)
+import Environment qualified
 import Environment qualified as Env
 import Object qualified
 import Text.Printf
+
+globalEnvironment :: IO (Object.Env)
+globalEnvironment = Environment.newEnclosedEnv =<< parentEnv
 
 parentEnv :: IO Object.Env
 parentEnv = do
