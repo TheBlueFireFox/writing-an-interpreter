@@ -1,7 +1,7 @@
 module EvaluatorSpec (spec) where
 
 import Ast (Expression (..), Statement (..))
-import Buildin qualified as Builtin
+import Buildin (globalEnvironment)
 import Data.Bifunctor (Bifunctor (bimap), first)
 import Data.HashMap.Strict (fromList)
 import Evaluator (evalProgram)
@@ -29,7 +29,7 @@ testEval :: String -> IO Object.Object
 testEval input = case parse input of
     Left [] -> error "Token empty"
     Left (current : _) -> error current
-    Right prog -> fst <$> ((`evalProgram` prog) =<< Builtin.parentEnv)
+    Right prog -> fst <$> ((`evalProgram` prog) =<< globalEnvironment)
 
 testIntegerObj :: SpecWith ()
 testIntegerObj = do
@@ -425,6 +425,7 @@ testHashLiterals = do
                     , ("{5: 5}[5]", int 5)
                     , ("{true: 5}[true]", int 5)
                     , ("{false: 5}[false]", int 5)
+                    , ("let len = 5; len", int 5)
                     ]
                 process = first testEval
                 (got, expected) = unzip . map process $ input
