@@ -36,7 +36,7 @@ mapPredecence xs =
         _ -> Lowest
 
 parse :: String -> Either Errors Program
-parse = helper [] . Lexer.run
+parse s = helper [] =<< Lexer.run s
   where
     helper acc token = case token of
         [] -> Left ["undefined state missing tokens"]

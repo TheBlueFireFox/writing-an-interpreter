@@ -3,32 +3,27 @@ module Lexer (run) where
 import Control.Applicative (Alternative ((<|>)))
 import Control.Arrow (Arrow (first, second))
 import Data.Char (isDigit, isLower, isSpace, isUpper)
-import Data.Maybe (fromJust)
 import Data.Tuple (swap)
 import Token (TokenType (..))
 
 newtype Lexer = Lexer String
     deriving (Show, Eq)
 
-run :: String -> [TokenType]
-run = fst . tokenize . new
+run :: String -> Either [String] [TokenType]
+run s = fst <$> tokenize (Lexer s)
 
-new :: String -> Lexer
-new = Lexer
-
-tokenize :: Lexer -> ([TokenType], Lexer)
+tokenize :: Lexer -> Either [String] ([TokenType], Lexer)
 tokenize = inner []
   where
-    inner :: [TokenType] -> Lexer -> ([TokenType], Lexer)
-    inner (Illegal v : _) _ = error $ "Illegal character -- " ++ v
-    inner acc@(Eof : _) l = (reverse acc, l)
-    inner acc l = uncurry inner . swap . second (: acc) . nextToken $ l
+    inner :: [TokenType] -> Lexer -> Either [String] ([TokenType], Lexer)
+    inner acc@(Eof : _) l = pure (reverse acc, l)
+    inner acc l = uncurry inner . swap . second (: acc) =<< nextToken l
 
 advanceLexer :: Lexer -> Int -> Lexer
 advanceLexer (Lexer input) v = Lexer $ drop v input
 
-nextToken :: Lexer -> (Lexer, TokenType)
-nextToken l@(Lexer input) = first (advanceLexer l) $ runHelper input
+nextToken :: Lexer -> Either [String] (Lexer, TokenType)
+nextToken l@(Lexer input) = first (advanceLexer l) <$> runHelper input
   where
     endOfFile v = case v of
         [] -> Just (Eof, 0)
@@ -41,11 +36,16 @@ nextToken l@(Lexer input) = first (advanceLexer l) $ runHelper input
             <|> readIdentifier v
             <|> readInteger v
             <|> readString v
-            <|> Just (Illegal v, 0)
 
-    parser v len = second (+ len) <$> parseClean v
+    parser v len =
+        case second (+ len) <$> parseClean v of
+            Nothing -> (Left [illegalChar v])
+            Just val -> Right val
 
-    runHelper = swap . fromJust . uncurry parser . skipWhitespace
+    illegalChar (c : _) = "Illegal character -- " ++ [c]
+    illegalChar [] = "Unexpected end of input"
+
+    runHelper v = swap <$> (uncurry parser . skipWhitespace) v
 
 isLetter :: Char -> Bool
 isLetter c = or [fun c | fun <- [isUpper, isLower, (== '_')]]
