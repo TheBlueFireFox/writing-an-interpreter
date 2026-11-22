@@ -43,6 +43,7 @@ library
       base >=4.7 && <5
     , hashable
     , haskeline
+    , transformers
     , unordered-containers
   default-language: GHC2021
 
@@ -58,6 +59,7 @@ executable interpreter-exe
     , hashable
     , haskeline
     , interpreter
+    , transformers
     , unordered-containers
   default-language: GHC2021
 
@@ -80,6 +82,7 @@ test-suite interpreter-test
     , haskeline
     , hspec ==2.*
     , interpreter
+    , transformers
     , unordered-containers
   default-language: GHC2021
   build-tool-depends: hspec-discover:hspec-discover == 2.*

@@ -26,6 +26,7 @@ dependencies:
   - unordered-containers
   - hashable
   - haskeline
+  - transformers
 
 ghc-options:
   - -Wall

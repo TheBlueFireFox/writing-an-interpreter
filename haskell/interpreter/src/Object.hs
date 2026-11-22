@@ -1,6 +1,7 @@
 module Object (module Object) where
 
 import Ast (Display (dprint), Expression, Statement)
+import Control.Monad.Trans.Except (ExceptT)
 import Data.Bifunctor (bimap)
 import Data.Bool (bool)
 import Data.HashMap.Strict (HashMap, toList)
@@ -11,7 +12,11 @@ import Environment qualified
 
 type Env = Environment.Env Object
 
-type BuildInFunction = [Object.Object] -> IO Object.Object
+newtype Abandon = Error String
+
+type Result a = ExceptT Abandon IO a
+
+type BuildInFunction = [Object.Object] -> Result Object.Object
 
 -- We don't care about this here
 instance Show BuildInFunction where
