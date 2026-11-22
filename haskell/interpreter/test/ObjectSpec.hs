@@ -1,7 +1,7 @@
 module ObjectSpec (spec) where
 
 import Data.Hashable (Hashable (hash))
-import Object (Object (..))
+import Object (HashableObject(..))
 import Test.Hspec (Spec, SpecWith, describe, it, shouldBe, shouldNotBe)
 
 spec :: Spec
@@ -14,7 +14,7 @@ testStringHashKey :: SpecWith ()
 testStringHashKey = do
     describe "TestStringHashKey" $ do
         let
-            str = Object.StrObj
+            str = Object.StrKey
         it "test string equality hashing" $ do
             let
                 hello1 = str "Hello World"
@@ -31,7 +31,7 @@ testBooleanHashKey :: SpecWith ()
 testBooleanHashKey = do
     describe "TestBooleanHashKey" $ do
         let
-            bool = Object.BoolObj
+            bool = Object.BoolKey
         it "test boolean equality hashing" $ do
             let
                 true1 = bool True
@@ -48,7 +48,7 @@ testIntegerHashKey :: SpecWith ()
 testIntegerHashKey = do
     describe "testIntegerHashKey" $ do
         let
-            int = Object.IntObj
+            int = Object.IntKey
         it "test int equality hashing" $ do
             let
                 one1 = int 1

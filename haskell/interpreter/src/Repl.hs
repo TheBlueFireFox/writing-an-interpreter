@@ -1,8 +1,9 @@
 module Repl (runner) where
 
-import Ast (Display (dprint), Program)
-import Buildin (globalEnvironment)
+import Ast (Display (dprint))
+import Builtin (globalEnvironment)
 import Control.Monad.IO.Class (liftIO)
+import Data.Bifunctor (first)
 import Evaluator (evalProgram)
 import Object qualified
 import Parser (parse)
@@ -34,7 +35,7 @@ innerProcess oenv line = do
     evalResult <- liftIO $ eval oenv line
     case evalResult of
         Left errs -> do
-            mapM_ outputStrLn errs
+            mapM_ (outputStrLn . ("ERROR: " ++)) errs
             pure oenv
         Right (Object.Null, env) -> pure env
         Right (others, env) -> do
@@ -45,11 +46,6 @@ eval :: Object.Env -> String -> IO (Either [String] (Object.Object, Object.Env))
 eval env input = case parse input of
     Left [] -> pure $ Left ["There was an error and the error list is empty"]
     Left errs -> pure $ Left errs
-    Right prog -> evalProgramHelper env prog
-
-evalProgramHelper :: Object.Env -> Ast.Program -> IO (Either [String] (Object.Object, Object.Env))
-evalProgramHelper env prog = do
-    res <- evalProgram env prog
-    case res of
-        Left (Object.Error err) -> pure $ Left [err]
-        Right ret -> pure $ Right ret
+    Right prog -> do
+        res <- evalProgram env prog
+        pure $ first (: []) res
