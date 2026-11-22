@@ -1,22 +1,28 @@
 module Evaluator (evalProgram) where
 
 import Ast qualified
-import Control.Arrow (first)
 import Control.Monad (foldM)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT)
-import Data.Either (partitionEithers)
+import Data.Bifunctor (first)
 import Data.HashMap.Strict (HashMap, fromList, (!?))
 import Data.Int (Int64)
 import Data.List (genericIndex)
 import Data.Maybe (fromMaybe)
 import Environment qualified as Env
-import Object (Abandon, Result)
+import Object (Abandon, Result, failWith)
 import Object qualified
 import Text.Printf (printf)
 
-evalProgram :: Object.Env -> Ast.Program -> IO (Either Abandon (Object.Object, Object.Env))
-evalProgram env (Ast.Program statements) = runExceptT $ inner env Object.Null statements
+evalProgram :: Object.Env -> Ast.Program -> IO (Either String (Object.Object, Object.Env))
+evalProgram env prog = do
+    res <- evalProgramHelper env prog
+    case res of
+        Left (Object.Error err) -> pure $ Left err
+        Right ret -> pure $ Right ret
+
+evalProgramHelper :: Object.Env -> Ast.Program -> IO (Either Abandon (Object.Object, Object.Env))
+evalProgramHelper env (Ast.Program statements) = runExceptT $ inner env Object.Null statements
   where
     inner :: Object.Env -> Object.Object -> [Ast.Statement] -> Result (Object.Object, Object.Env)
     inner env' lst [] = pure (lst, env')
@@ -24,7 +30,6 @@ evalProgram env (Ast.Program statements) = runExceptT $ inner env Object.Null st
         s <- evalStatement env' curr
         case s of
             (Object.RetObj v, env'') -> pure (v, env'')
-            (c@(Object.ErrObj _), env'') -> pure (c, env'')
             (next, env'') -> inner env'' next cs
 
 evalStatement :: Object.Env -> Ast.Statement -> Result (Object.Object, Object.Env)
@@ -50,7 +55,6 @@ evalBlockStatement env = inner env Object.Null
     inner env' _ (c : cs) = do
         s <- evalStatement env' c
         case s of
-            (curr@(Object.ErrObj _), _) -> pure curr
             (curr@(Object.RetObj _), _) -> pure curr
             (curr, env'') -> inner env'' curr cs
 
@@ -62,11 +66,11 @@ evalExpression env expr =
         Ast.BooleanExpr v -> pure $ Object.BoolObj v
         Ast.StrExpr v -> pure $ Object.StrObj v
         Ast.NotExpr v -> evalOne env evalNegPrefix v
-        Ast.NegExpr v -> evalOne env evalMinusPrefix v
+        Ast.NegExpr v -> evalOneM env evalMinusPrefix v
         Ast.AddExpr l r -> evalAddExpr env l r
         Ast.MinExpr l r -> evalTwoInt env Object.IntObj (-) "-" l r
         Ast.MulExpr l r -> evalTwoInt env Object.IntObj (*) "*" l r
-        Ast.DivExpr l r -> evalTwoInt env id evalTwoDiv "/" l r
+        Ast.DivExpr l r -> evalTwoIntM env evalTwoDiv "/" l r
         Ast.LeExpr l r -> evalTwoInt env Object.BoolObj (<) "<" l r
         Ast.GtExpr l r -> evalTwoInt env Object.BoolObj (>) ">" l r
         Ast.EqExpr l r -> evalEqExpr env l r
@@ -82,25 +86,23 @@ evalIndexExpr :: Object.Env -> Ast.Expression -> Ast.Expression -> Result Object
 evalIndexExpr = evalTwoExpr fn
   where
     fn l' r' =
-        pure $ case (l', r') of
-            (err@(Object.ErrObj _), _) -> err
-            (_, err@(Object.ErrObj _)) -> err
-            (Object.ArrObj objs, Object.IntObj v) -> evalArrayIndexExpr objs v
+        case (l', r') of
+            (Object.ArrObj objs, Object.IntObj v) -> pure $ evalArrayIndexExpr objs v
             (Object.HashObj objs, v) -> evalHashIndexExpr objs v
-            (l, _) -> Object.ErrObj $ "index operator not supported: " ++ Object.typeObject l
+            (l, _) -> failWith $ "index operator not supported: " ++ Object.typeObject l
 
 evalArrayIndexExpr :: (Integral a) => [Object.Object] -> a -> Object.Object
 evalArrayIndexExpr objs index
     | index < 0 || length objs <= fromIntegral index = Object.Null
     | otherwise = genericIndex objs index
 
-evalHashIndexExpr :: HashMap Object.Object Object.Object -> Object.Object -> Object.Object
-evalHashIndexExpr m key = case Object.genSimpleHash key of
-    Right _ -> fromMaybe Object.Null $ m !? key
-    Left err -> Object.ErrObj err
+evalHashIndexExpr :: HashMap Object.HashableObject Object.Object -> Object.Object -> Result Object.Object
+evalHashIndexExpr m key = case Object.toHashKey key of
+    Left err -> failWith err
+    Right hashableKey -> pure $ fromMaybe Object.Null $ m !? hashableKey
 
-checkOps :: Object.Object -> Object.Object -> [Char] -> Object.Object
-checkOps l r s = Object.ErrObj $ pref ++ ls ++ " " ++ s ++ " " ++ rs
+checkOps :: Object.Object -> Object.Object -> [Char] -> Result Object.Object
+checkOps l r s = failWith $ pref ++ ls ++ " " ++ s ++ " " ++ rs
   where
     ls = Object.typeObject l
     rs = Object.typeObject r
@@ -119,61 +121,79 @@ evalTwoExpr fn env left right = do
     r' <- evalExpression env right
     fn l' r'
 
-evalOne :: Object.Env -> (Object.Object -> b) -> Ast.Expression -> Result b
-evalOne env fun val = fun <$> evalExpression env val
+evalOneM ::
+    Object.Env ->
+    (Object.Object -> Result b) ->
+    Ast.Expression ->
+    Result b
+evalOneM env fun val = fun =<< evalExpression env val
 
-evalTwoDiv :: Int64 -> Int64 -> Object.Object
+evalOne :: Object.Env -> (Object.Object -> b) -> Ast.Expression -> Result b
+evalOne env fun val = evalOneM env (pure . fun) val
+
+evalTwoDiv :: Int64 -> Int64 -> Result Object.Object
 evalTwoDiv l r
-    | r == 0 = Object.ErrObj "division by zero"
-    | l == minBound && r == (-1) = Object.ErrObj "arithmetic overflow"
-    | otherwise = Object.IntObj $ quot l r
+    | r == 0 = failWith "division by zero"
+    | l == minBound && r == (-1) = failWith "arithmetic overflow"
+    | otherwise = pure $ Object.IntObj $ quot l r
+
+evalTwoIntM ::
+    Object.Env ->
+    (Int64 -> Int64 -> Result Object.Object) ->
+    [Char] ->
+    Ast.Expression ->
+    Ast.Expression ->
+    Result Object.Object
+evalTwoIntM env fun sFun = evalTwoExpr fn env
+  where
+    fn l' r' =
+        case (l', r') of
+            (Object.IntObj l, Object.IntObj r) -> fun l r
+            (l, r) -> checkOps l r sFun
 
 evalTwoInt ::
     Object.Env ->
     (a -> Object.Object) ->
     (Int64 -> Int64 -> a) ->
-    String ->
+    [Char] ->
     Ast.Expression ->
     Ast.Expression ->
     Result Object.Object
-evalTwoInt env toObj fun sFun = evalTwoExpr fn env
-  where
-    fn l' r' =
-        pure $ case (l', r') of
-            (Object.IntObj l, Object.IntObj r) -> toObj $ fun l r
-            (l, r) -> checkOps l r sFun
+evalTwoInt env toObj fun = evalTwoIntM env (\l r -> pure $ toObj $ fun l r)
 
 evalEqExpr :: Object.Env -> Ast.Expression -> Ast.Expression -> Result Object.Object
 evalEqExpr = evalTwoExpr fn
   where
     fn l' r' =
-        pure $ case (l', r') of
-            (Object.BoolObj l, Object.BoolObj r) -> Object.BoolObj $ l == r
-            (Object.IntObj l, Object.IntObj r) -> Object.BoolObj $ l == r
+        case (l', r') of
+            (Object.BoolObj l, Object.BoolObj r) -> pure $ Object.BoolObj $ l == r
+            (Object.IntObj l, Object.IntObj r) -> pure $ Object.BoolObj $ l == r
             (l, r) -> checkOps l r "=="
 
 evalAddExpr :: Object.Env -> Ast.Expression -> Ast.Expression -> Result Object.Object
 evalAddExpr = evalTwoExpr fn
   where
     fn l' r' =
-        pure $ case (l', r') of
-            (Object.IntObj l, Object.IntObj r) -> Object.IntObj $ l + r
-            (Object.StrObj l, Object.StrObj r) -> Object.StrObj $ l ++ r
+        case (l', r') of
+            (Object.IntObj l, Object.IntObj r) -> pure $ Object.IntObj $ l + r
+            (Object.StrObj l, Object.StrObj r) -> pure $ Object.StrObj $ l ++ r
             (l, r) -> checkOps l r "+"
 
 evalNeqExpr :: Object.Env -> Ast.Expression -> Ast.Expression -> Result Object.Object
 evalNeqExpr = evalTwoExpr fn
   where
     fn l' r' =
-        pure $ case (l', r') of
-            (Object.BoolObj l, Object.BoolObj r) -> Object.BoolObj $ l /= r
-            (Object.IntObj l, Object.IntObj r) -> Object.BoolObj $ l /= r
+        case (l', r') of
+            (Object.BoolObj l, Object.BoolObj r) -> pure $ Object.BoolObj $ l /= r
+            (Object.IntObj l, Object.IntObj r) -> pure $ Object.BoolObj $ l /= r
             (l, r) -> checkOps l r "!="
 
 evalIdent :: Object.Env -> String -> Result Object.Object
-evalIdent env name = fromMaybe fallback <$> liftIO (Env.getEnv env name)
-  where
-    fallback = Object.ErrObj $ "identifier not found: " ++ name
+evalIdent env name = do
+    res <- liftIO (Env.getEnv env name)
+    case res of
+        Just has -> pure has
+        Nothing -> failWith $ "identifier not found: " ++ name
 
 evalIfExpr ::
     Object.Env ->
@@ -201,35 +221,26 @@ evalNegPrefix v = case v of
     Object.Null -> Object.BoolObj True
     _ -> Object.BoolObj False
 
-evalMinusPrefix :: Object.Object -> Object.Object
+evalMinusPrefix :: Object.Object -> Result Object.Object
 evalMinusPrefix obj = case obj of
-    (Object.IntObj v) -> Object.IntObj (negate v)
-    c -> Object.ErrObj $ "unknown operator: -" ++ Object.typeObject c
+    (Object.IntObj v) -> pure $ Object.IntObj (negate v)
+    c -> failWith $ "unknown operator: -" ++ Object.typeObject c
 
 evalCallExpr :: Ast.Expression -> [Ast.Expression] -> Object.Env -> Result Object.Object
 evalCallExpr fn args env = do
     l' <- evalExpression env fn
     r' <- evalExpressions env args
     case (l', r') of
-        (err@(Object.ErrObj _), _) -> pure err
-        (_, [err@(Object.ErrObj _)]) -> pure err
         (Object.FnObj params body fnEnv, args') -> applyFn params body fnEnv args'
         (Object.BuiObj fn', args') -> fn' args'
-        (l, _) -> pure $ Object.ErrObj $ "not a function: " ++ Object.typeObject l
+        (l, _) -> failWith $ "not a function: " ++ Object.typeObject l
 
 evalExpressions :: Env.Env Object.Object -> [Ast.Expression] -> Result [Object.Object]
-evalExpressions env = inner []
-  where
-    inner acc [] = pure $ reverse acc
-    inner acc (c : cs) = check acc cs =<< evalExpression env c
-
-    check acc cs f = case f of
-        err@(Object.ErrObj _) -> pure [err]
-        obj -> inner (obj : acc) cs
+evalExpressions env = mapM (evalExpression env)
 
 applyFn :: [Ast.Expression] -> Ast.Statement -> Object.Env -> [Object.Object] -> Result Object.Object
 applyFn params body fnEnv args
-    | lenParams /= lenArgs = pure $ Object.ErrObj $ printf "wrong number of arguments. got=%d, want=%d" lenArgs lenParams
+    | lenParams /= lenArgs = failWith $ printf "wrong number of arguments. got=%d, want=%d" lenArgs lenParams
     | otherwise = do
         efn <- extendFnEnv params fnEnv args
         b <- evalStatement efn body
@@ -243,6 +254,7 @@ applyFn params body fnEnv args
 extendFnEnv :: [Ast.Expression] -> Env.Env a -> [a] -> Result (Env.Env a)
 extendFnEnv params fnEnv args = do
     fenv <- liftIO $ Env.newEnclosedEnv fnEnv
+    -- zip is okay here as we ensure on applyFn that params and args are of equal length
     foldM apply fenv (zip params args)
   where
     unwrapExpr val = case val of
@@ -252,22 +264,10 @@ extendFnEnv params fnEnv args = do
     apply env (param, arg) = liftIO $ Env.setEnv env (unwrapExpr param) arg
 
 evalHashExpr :: Object.Env -> [(Ast.Expression, Ast.Expression)] -> Result Object.Object
-evalHashExpr env m = handleError . partitionEithers <$> mapM handleExpr m
+evalHashExpr env = fmap (Object.HashObj . fromList) . traverse handleExpr
   where
     handleExpr (k, v) = do
         k' <- evalExpression env k
-        v' <- evalExpression env v
-        pure $ uncurry genHash =<< handler k' v'
-
-    handler k v = case (k, v) of
-        (err@(Object.ErrObj _), _) -> Left err
-        (_, err@(Object.ErrObj _)) -> Left err
-        _ -> Right (k, v)
-
-    genHash key value = case Object.genSimpleHash key of
-        Right _ -> Right (key, value)
-        Left err -> Left $ Object.ErrObj err
-
-    handleError (l, r)
-        | [] <- l = Object.HashObj $ fromList r
-        | (x : _) <- l = x
+        keyHash <- either failWith pure $ Object.toHashKey k'
+        value <- evalExpression env v
+        pure (keyHash, value)

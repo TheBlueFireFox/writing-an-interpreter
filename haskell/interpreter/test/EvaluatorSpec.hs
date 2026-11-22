@@ -1,7 +1,7 @@
 module EvaluatorSpec (spec) where
 
-import Ast (Expression (..), Statement (..), Program)
-import Buildin (globalEnvironment)
+import Ast (Expression (..), Program, Statement (..))
+import Builtin (globalEnvironment)
 import Data.Bifunctor (Bifunctor (bimap), first)
 import Data.HashMap.Strict (fromList)
 import Data.Int (Int64)
@@ -26,18 +26,16 @@ spec = do
     testDrivingArrays
     testHashLiterals
 
-testEval :: String -> IO Object.Object
-testEval input = case parse input of
-    Left [] -> error "Token empty"
-    Left (current : _) -> error current
-    Right prog -> testEvalHelper prog
+testEval :: String -> IO (Either String Object.Object)
+testEval input = testEvalHelper input ((fmap . fmap) fst . inner)
+  where
+    inner prog = ((`evalProgram` prog) =<< globalEnvironment)
 
-testEvalHelper :: Ast.Program  -> IO Object.Object
-testEvalHelper prog = do 
-    res <- ((`evalProgram` prog) =<< globalEnvironment)
-    case res of
-        Left (Object.Error err) -> error err
-        Right ret -> pure $ fst ret
+testEvalHelper :: (Applicative f) => String -> (Program -> f (Either String b)) -> f (Either String b)
+testEvalHelper input fn = case parse input of
+    Left [] -> pure $ Left "PARSING: Token empty"
+    Left (current : _) -> pure $ Left $ "PARSING: " ++ current
+    Right prog -> fn prog
 
 testIntegerObj :: SpecWith ()
 testIntegerObj = do
@@ -52,15 +50,19 @@ testIntegerObj = do
                     , Object.IntObj 10
                     ]
             t <- mapM testEval input
-            t `shouldBe` expected
+            t `shouldBe` map Right expected
         it "negation" $ do
             let input =
-                    ["-5", "-10"]
+                    [ "-5"
+                    , "-10"
+                    ]
                 expected =
-                    [Object.IntObj (-5), Object.IntObj (-10)]
+                    [ Object.IntObj (-5)
+                    , Object.IntObj (-10)
+                    ]
 
             t <- mapM testEval input
-            t `shouldBe` expected
+            t `shouldBe` map Right expected
         it "evaluation" $ do
             let rawInput =
                     [ ("5 + 5 + 5 + 5 - 10", 10)
@@ -77,13 +79,13 @@ testIntegerObj = do
                     ]
                 (input, expected) = unzip rawInput
             t <- mapM testEval input
-            t `shouldBe` map Object.IntObj expected
+            t `shouldBe` map (Right . Object.IntObj) expected
         it "evaluate division" $ do
             let rawInput =
-                    [ ("2/1", Object.IntObj 2)
-                    , ("-7/2", Object.IntObj (-3))
-                    , ("1/0", Object.ErrObj "division by zero")
-                    , (show (minBound :: Int64) ++ "/-1", Object.ErrObj "arithmetic overflow")
+                    [ ("2/1", Right (Object.IntObj 2))
+                    , ("-7/2", Right (Object.IntObj (-3)))
+                    , ("1/0", Left "division by zero")
+                    , (show (minBound :: Int64) ++ "/-1", Left "arithmetic overflow")
                     ]
                 (input, expected) = unzip rawInput
             t <- mapM testEval input
@@ -102,7 +104,7 @@ testBoolObj = do
                     , Object.BoolObj False
                     ]
             t <- mapM testEval input
-            t `shouldBe` expected
+            t `shouldBe` map Right expected
         it "evaluation bool" $ do
             let rawInput =
                     [ ("true", True)
@@ -116,7 +118,7 @@ testBoolObj = do
 
                 (input, expected) = unzip rawInput
             t <- mapM testEval input
-            t `shouldBe` map Object.BoolObj expected
+            t `shouldBe` map (Right . Object.BoolObj) expected
         it "evaluation Integer" $ do
             let rawInput =
                     [ ("1 < 2", True)
@@ -131,19 +133,19 @@ testBoolObj = do
 
                 (input, expected) = unzip rawInput
             t <- mapM testEval input
-            t `shouldBe` map Object.BoolObj expected
+            t `shouldBe` map (Right . Object.BoolObj) expected
 
 testStrObj :: SpecWith ()
 testStrObj =
     describe "TestStrObj" $ do
         it "simple Hello World!" $ do
             let input = "\"Hello World!\""
-                expected = Object.StrObj "Hello World!"
+                expected = Right $ Object.StrObj "Hello World!"
             t <- testEval input
             t `shouldBe` expected
         it "concatination" $ do
             let input = "\"Hello\" + \" \" + \"World!\""
-                expected = Object.StrObj "Hello World!"
+                expected = Right $ Object.StrObj "Hello World!"
             t <- testEval input
             t `shouldBe` expected
 
@@ -159,7 +161,7 @@ testBangObj = do
                     , ("!!false", False)
                     , ("!!5", True)
                     ]
-                process = bimap testEval Object.BoolObj
+                process = bimap testEval (Right . Object.BoolObj)
                 (got, expected) = unzip . map process $ lst
             g <- sequence got
             g `shouldBe` expected
@@ -180,7 +182,7 @@ testIfElse = do
                 process = first testEval
                 (got, expected) = unzip . map process $ lst
             g <- sequence got
-            g `shouldBe` expected
+            g `shouldBe` map Right expected
 
 testArray :: SpecWith ()
 testArray = do
@@ -192,7 +194,7 @@ testArray = do
                         [ Object.IntObj v | v <- [1, 4, 6]
                         ]
             g <- testEval input
-            g `shouldBe` expected
+            g `shouldBe` Right expected
         it "index expressions" $ do
             let lst =
                     [ ("[1, 2, 3][0]", Object.IntObj 1)
@@ -208,12 +210,12 @@ testArray = do
                 process = first testEval
                 (got, expected) = unzip . map process $ lst
             g <- sequence got
-            g `shouldBe` expected
+            g `shouldBe` map Right expected
         it "index expressions with math" $ do
             let
                 -- this test createed problems so here I am testing only it
                 got = testEval "let myArray = [1, 2, 3]; myArray[0] + myArray[1] + myArray[2];"
-                expected = Object.IntObj 6
+                expected = Right $ Object.IntObj 6
             g <- got
             g `shouldBe` expected
 
@@ -230,10 +232,10 @@ testReturn = do
                 process = first testEval
                 (got, expected) = unzip . map process $ lst
             g <- sequence got
-            g `shouldBe` expected
+            g `shouldBe` map Right expected
         it "blockStatements" $ do
             let input = "if (10 > 1) { if (10 > 1) { return 10; } return 1; }"
-                expected = Object.IntObj 10
+                expected = Right $ Object.IntObj 10
             t <- testEval input
             t `shouldBe` expected
 
@@ -251,8 +253,16 @@ testErrorHandling = do
                     , ("if (10 > 1) { true + false; }", "unknown operator: BOOLEAN + BOOLEAN")
                     , ("if (10 > 1) { if (10 > 1) { return true + false; } return 1;}", "unknown operator: BOOLEAN + BOOLEAN")
                     , ("{\"name\": \"Monkey\"}[fn(x) { x }];", "unusable as hash key: FN")
+                    , ("let a = 5 + true; a", "type mismatch: INTEGER + BOOLEAN")
+                    , ("[1, 5 + true]", "type mismatch: INTEGER + BOOLEAN")
+                    , ("!(5 + true)", "type mismatch: INTEGER + BOOLEAN")
+                    , ("if (5 + true) { 1 }", "type mismatch: INTEGER + BOOLEAN")
+                    , ("(1 + true) + 1", "type mismatch: INTEGER + BOOLEAN")
+                    , ("!(1 / 0)", "division by zero")
+                    , ("-(1 / 0)", "division by zero")
+                    , ("[len(1)]", "argument to \"len\" not supported, got INTEGER")
                     ]
-                process = bimap testEval Object.ErrObj
+                process = bimap testEval Left
                 (got, expected) = unzip . map process $ lst
             g <- sequence got
             g `shouldBe` expected
@@ -261,7 +271,7 @@ testErrorHandling = do
                     [ ("foobar", "identifier not found: foobar")
                     , ("x(){}", "identifier not found: x")
                     ]
-                process = bimap testEval Object.ErrObj
+                process = bimap testEval Left
                 (got, expected) = unzip . map process $ lst
             g <- sequence got
             g `shouldBe` expected
@@ -276,7 +286,7 @@ testLet = do
                     , ("let a = 5; let b = a; b;", 5)
                     , ("let a = 5; let b = a; let c = a + b + 5; c;", 15)
                     ]
-                process = bimap testEval Object.IntObj
+                process = bimap testEval (Right . Object.IntObj)
                 (got, expected) = unzip . map process $ lst
             g <- sequence got
             g `shouldBe` expected
@@ -296,7 +306,7 @@ testFun = do
             -- direct comparison doesn't work as the Environment.Env is a IORef and the Eq
             -- for that uses pointer equality (not very useful here)
             let (params, body) = case t of
-                    (Object.FnObj p b _) -> (p, b)
+                    Right (Object.FnObj p b _) -> (p, b)
                     _ -> error "incorrect type"
             params `shouldBe` eparams
             body `shouldBe` ebody
@@ -305,7 +315,7 @@ testFun = do
                     [ ("fn(x, y) { x + y }(1)", "wrong number of arguments. got=1, want=2")
                     , ("fn(x) { x }(1, 2)", "wrong number of arguments. got=2, want=1")
                     ]
-                process = bimap testEval Object.ErrObj
+                process = bimap testEval Left
                 (got, expected) = unzip . map process $ lst
             g <- sequence got
             g `shouldBe` expected
@@ -313,7 +323,7 @@ testFun = do
             let lst =
                     [ ("5(){}", "not a function: INTEGER")
                     ]
-                process = bimap testEval Object.ErrObj
+                process = bimap testEval Left
                 (got, expected) = unzip . map process $ lst
             g <- sequence got
             g `shouldBe` expected
@@ -326,13 +336,13 @@ testFun = do
                     , ("let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));", 20)
                     , ("fn(x) { x; }(5)", 5)
                     ]
-                process = bimap testEval Object.IntObj
+                process = bimap testEval (Right . Object.IntObj)
                 (got, expected) = unzip . map process $ lst
             g <- sequence got
             g `shouldBe` expected
         it "closures" $ do
             let input = "let newAdder = fn(x) { fn(y) { x + y }; }; let addTwo = newAdder(2); addTwo(2)"
-                expected = Object.IntObj 4
+                expected = Right $ Object.IntObj 4
             t <- testEval input
             t `shouldBe` expected
 
@@ -341,11 +351,11 @@ testBuildIns =
     describe "TestBuildIns" $ do
         it "len" $ do
             let lst =
-                    [ ("len(\"\")", Object.IntObj 0)
-                    , ("len(\"four\")", Object.IntObj 4)
-                    , ("len(\"hello world\")", Object.IntObj 11)
-                    , ("len(1)", Object.ErrObj "argument to \"len\" not supported, got INTEGER")
-                    , ("len(\"one\", \"two\")", Object.ErrObj "wrong number of arguments. got=2, want=1")
+                    [ ("len(\"\")", Right (Object.IntObj 0))
+                    , ("len(\"four\")", Right (Object.IntObj 4))
+                    , ("len(\"hello world\")", Right (Object.IntObj 11))
+                    , ("len(1)", Left "argument to \"len\" not supported, got INTEGER")
+                    , ("len(\"one\", \"two\")", Left "wrong number of arguments. got=2, want=1")
                     ]
                 process = first testEval
                 (got, expected) = unzip . map process $ lst
@@ -353,11 +363,11 @@ testBuildIns =
             g `shouldBe` expected
         it "first" $ do
             let lst =
-                    [ ("first([2])", Object.IntObj 2)
-                    , ("first([2, 4])", Object.IntObj 2)
-                    , ("first([])", Object.ErrObj "ARRAY object list empty")
-                    , ("first(1)", Object.ErrObj "argument to \"first\" must be ARRAY, got INTEGER")
-                    , ("first(1, 3)", Object.ErrObj "wrong number of arguments. got=2, want=1")
+                    [ ("first([2])", Right (Object.IntObj 2))
+                    , ("first([2, 4])", Right (Object.IntObj 2))
+                    , ("first([])", Left "ARRAY object list empty")
+                    , ("first(1)", Left "argument to \"first\" must be ARRAY, got INTEGER")
+                    , ("first(1, 3)", Left "wrong number of arguments. got=2, want=1")
                     ]
                 process = first testEval
                 (got, expected) = unzip . map process $ lst
@@ -365,11 +375,11 @@ testBuildIns =
             g `shouldBe` expected
         it "rest" $ do
             let lst =
-                    [ ("rest([2])", Object.ArrObj [])
-                    , ("rest([2, 4])", Object.ArrObj [Object.IntObj 4])
-                    , ("rest([])", Object.ErrObj "ARRAY object list empty")
-                    , ("rest(1)", Object.ErrObj "argument to \"rest\" must be ARRAY, got INTEGER")
-                    , ("rest(1, 3)", Object.ErrObj "wrong number of arguments. got=2, want=1")
+                    [ ("rest([2])", Right (Object.ArrObj []))
+                    , ("rest([2, 4])", Right (Object.ArrObj [Object.IntObj 4]))
+                    , ("rest([])", Left "ARRAY object list empty")
+                    , ("rest(1)", Left "argument to \"rest\" must be ARRAY, got INTEGER")
+                    , ("rest(1, 3)", Left "wrong number of arguments. got=2, want=1")
                     ]
                 process = first testEval
                 (got, expected) = unzip . map process $ lst
@@ -377,11 +387,11 @@ testBuildIns =
             g `shouldBe` expected
         it "last" $ do
             let lst =
-                    [ ("last([4])", Object.IntObj 4)
-                    , ("last([2, 4])", Object.IntObj 4)
-                    , ("last([])", Object.ErrObj "ARRAY object list empty")
-                    , ("last(1)", Object.ErrObj "argument to \"last\" must be ARRAY, got INTEGER")
-                    , ("last(1, 3)", Object.ErrObj "wrong number of arguments. got=2, want=1")
+                    [ ("last([4])", Right (Object.IntObj 4))
+                    , ("last([2, 4])", Right (Object.IntObj 4))
+                    , ("last([])", Left "ARRAY object list empty")
+                    , ("last(1)", Left "argument to \"last\" must be ARRAY, got INTEGER")
+                    , ("last(1, 3)", Left "wrong number of arguments. got=2, want=1")
                     ]
                 process = first testEval
                 (got, expected) = unzip . map process $ lst
@@ -389,11 +399,11 @@ testBuildIns =
             g `shouldBe` expected
         it "push" $ do
             let lst =
-                    [ ("push([], 2)", Object.ArrObj [Object.IntObj 2])
-                    , ("push([4], 2)", Object.ArrObj [Object.IntObj 4, Object.IntObj 2])
-                    , ("push([4], [2])", Object.ArrObj [Object.IntObj 4, Object.ArrObj [Object.IntObj 2]])
-                    , ("push(1, 3)", Object.ErrObj "first argument to \"push\" must be ARRAY, got INTEGER")
-                    , ("push([])", Object.ErrObj "wrong number of arguments. got=1, want=2")
+                    [ ("push([], 2)", Right (Object.ArrObj [Object.IntObj 2]))
+                    , ("push([4], 2)", Right (Object.ArrObj [Object.IntObj 4, Object.IntObj 2]))
+                    , ("push([4], [2])", Right (Object.ArrObj [Object.IntObj 4, Object.ArrObj [Object.IntObj 2]]))
+                    , ("push(1, 3)", Left "first argument to \"push\" must be ARRAY, got INTEGER")
+                    , ("push([])", Left "wrong number of arguments. got=1, want=2")
                     ]
                 process = first testEval
                 (got, expected) = unzip . map process $ lst
@@ -417,7 +427,7 @@ testDrivingArrays =
                 inputExpr = "iter(2);"
                 input = inputMap ++ inputExpr
 
-                expected = Object.IntObj 42
+                expected = Right $ Object.IntObj 42
             got <- testEval input
             got `shouldBe` expected
         it "map -- function in function" $ do
@@ -439,7 +449,7 @@ testDrivingArrays =
                 inputExpr = "map(a, double);"
                 input = inputMap ++ inputArr ++ inputDouble ++ inputExpr
 
-                expected = Object.ArrObj $ [Object.IntObj v | v <- [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]]
+                expected = Right $ Object.ArrObj $ [Object.IntObj v | v <- [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]]
             got <- testEval input
             got `shouldBe` expected
         it "reduce" $ do
@@ -466,16 +476,17 @@ testDrivingArrays =
                     \"
                 arr = "sum([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);"
                 input = reduceFn ++ sumFn ++ arr
-                expected = Object.IntObj 55
+                expected = Right $ Object.IntObj 55
             got <- testEval input
             got `shouldBe` expected
 
 testHashLiterals :: SpecWith ()
 testHashLiterals = do
-    let str = Object.StrObj
-        int = Object.IntObj
-        bool = Object.BoolObj
+    let int = Object.IntObj
         nil = Object.Null
+        strKey = Object.StrKey
+        intKey = Object.IntKey
+        boolKey = Object.BoolKey
     describe "TestHashLiterals" $ do
         it "eveluate complex hash literal" $ do
             let input =
@@ -492,15 +503,15 @@ testHashLiterals = do
                     \"
                 expected =
                     Object.HashObj . fromList $
-                        [ (str "one", int 1)
-                        , (str "two", int 2)
-                        , (str "three", int 3)
-                        , (int 4, int 4)
-                        , (bool True, int 5)
-                        , (bool False, int 6)
+                        [ (strKey "one", int 1)
+                        , (strKey "two", int 2)
+                        , (strKey "three", int 3)
+                        , (intKey 4, int 4)
+                        , (boolKey True, int 5)
+                        , (boolKey False, int 6)
                         ]
             got <- testEval input
-            got `shouldBe` expected
+            got `shouldBe` (Right expected)
     describe "TestHashIndexExpressions" $ do
         it "list of examples" $ do
             let input =
@@ -513,7 +524,7 @@ testHashLiterals = do
                     , ("{false: 5}[false]", int 5)
                     , ("let len = 5; len", int 5)
                     ]
-                process = first testEval
+                process = bimap testEval Right
                 (got, expected) = unzip . map process $ input
             g <- sequence got
             g `shouldBe` expected

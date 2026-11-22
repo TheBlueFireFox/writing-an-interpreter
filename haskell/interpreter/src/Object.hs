@@ -2,17 +2,21 @@ module Object (module Object) where
 
 import Ast (Display (dprint), Expression, Statement)
 import Control.Monad.Trans.Except (ExceptT)
-import Data.Bifunctor (bimap)
+import Control.Monad.Trans.Except qualified as Except
 import Data.Bool (bool)
 import Data.HashMap.Strict (HashMap, toList)
-import Data.Hashable (Hashable (..))
+import Data.Hashable (Hashable)
 import Data.Int (Int64)
 import Data.List (intercalate)
 import Environment qualified
+import GHC.Generics (Generic)
 
 type Env = Environment.Env Object
 
-newtype Abandon = Error String
+failWith :: (Monad m) => String -> ExceptT Abandon m a
+failWith s = Except.throwE $ Error s
+
+data Abandon = Error String
 
 type Result a = ExceptT Abandon IO a
 
@@ -32,31 +36,32 @@ data Object
     | BoolObj Bool
     | StrObj String
     | ArrObj [Object]
-    | HashObj (HashMap Object Object)
+    | HashObj (HashMap HashableObject Object)
     | RetObj Object
     | FnObj [Expression] Statement Env -- Params Body Env
     | BuiObj BuildInFunction -- Fn
-    | ErrObj String
     deriving (Show, Eq)
 
-instance Hashable Object where
-    hashWithSalt salt obj = process (obj, obj)
-      where
-        process = uncurry (*) . bimap (hashWithSalt salt . typeObject) hasher
+data HashableObject
+    = IntKey Int64
+    | BoolKey Bool
+    | StrKey String
+    deriving (Show, Eq, Generic)
 
-        hasher obj' = case genHash salt obj' of
-            Right v -> v
-            Left err -> error err
+instance Hashable HashableObject
 
-genHash :: Int -> Object -> Either String Int
-genHash salt obj = case obj of
-    IntObj v -> Right $ hashWithSalt salt v
-    StrObj v -> Right $ hashWithSalt salt v
-    BoolObj v -> Right $ hashWithSalt salt v
+toHashKey :: Object -> Either String HashableObject
+toHashKey obj = case obj of
+    IntObj v -> pure $ IntKey v
+    StrObj v -> pure $ StrKey v
+    BoolObj v -> pure $ BoolKey v
     o -> Left $ "unusable as hash key: " ++ typeObject o
 
-genSimpleHash :: Object -> Either String Int
-genSimpleHash = Object.genHash 0
+fromHashKey :: HashableObject -> Object
+fromHashKey key = case key of
+    IntKey v -> IntObj v
+    BoolKey v -> BoolObj v
+    StrKey v -> StrObj v
 
 typeObject :: Object -> String
 typeObject obj = case obj of
@@ -67,7 +72,6 @@ typeObject obj = case obj of
     ArrObj _ -> "ARRAY"
     HashObj _ -> "HASH"
     RetObj _ -> "RETURN"
-    ErrObj _ -> "ERROR"
     BuiObj _ -> "BUILTIN"
     FnObj{} -> "FN"
 
@@ -77,8 +81,7 @@ instance Display Object where
     dprint (BoolObj v) = bool "false" "true" v
     dprint (StrObj v) = v
     dprint (RetObj v) = "return " ++ dprint v
-    dprint (ErrObj v) = "ERROR: " ++ v
     dprint (BuiObj _) = "builtin function"
     dprint (ArrObj arr) = "[" ++ intercalate ", " (map dprint arr) ++ "]"
-    dprint (HashObj obj) = "{" ++ intercalate ", " (map (\(k, v) -> dprint k ++ ": " ++ dprint v) (toList obj)) ++ "}"
+    dprint (HashObj obj) = "{" ++ intercalate ", " (map (\(k, v) -> dprint (fromHashKey k) ++ ": " ++ dprint v) (toList obj)) ++ "}"
     dprint (FnObj params expr _) = "fn(" ++ intercalate ", " (map dprint params) ++ ")" ++ "{\n" ++ dprint expr ++ "\n}"
