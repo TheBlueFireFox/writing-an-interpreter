@@ -1,6 +1,6 @@
 module EvaluatorSpec (spec) where
 
-import Ast (Expression (..), Statement (..))
+import Ast (Expression (..), Statement (..), Program)
 import Buildin (globalEnvironment)
 import Data.Bifunctor (Bifunctor (bimap), first)
 import Data.HashMap.Strict (fromList)
@@ -30,7 +30,14 @@ testEval :: String -> IO Object.Object
 testEval input = case parse input of
     Left [] -> error "Token empty"
     Left (current : _) -> error current
-    Right prog -> fst <$> ((`evalProgram` prog) =<< globalEnvironment)
+    Right prog -> testEvalHelper prog
+
+testEvalHelper :: Ast.Program  -> IO Object.Object
+testEvalHelper prog = do 
+    res <- ((`evalProgram` prog) =<< globalEnvironment)
+    case res of
+        Left (Object.Error err) -> error err
+        Right ret -> pure $ fst ret
 
 testIntegerObj :: SpecWith ()
 testIntegerObj = do

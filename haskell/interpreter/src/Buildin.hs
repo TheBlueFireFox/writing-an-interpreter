@@ -2,8 +2,10 @@ module Buildin (globalEnvironment) where
 
 import Ast (dprint)
 import Control.Arrow (Arrow (second))
+import Control.Monad.IO.Class (liftIO)
 import Data.List (uncons, unsnoc)
 import Environment qualified as Env
+import Object (Result)
 import Object qualified
 import Text.Printf
 
@@ -12,8 +14,8 @@ globalEnvironment = Env.newEnclosedEnv =<< parentEnv
 
 parentEnv :: IO Object.Env
 parentEnv = do
-    empty <- Env.newEnv
-    inner empty $ map (second Object.BuiObj) lst
+    empty <- liftIO Env.newEnv
+    liftIO $ inner empty $ map (second Object.BuiObj) lst
   where
     lst =
         [ ("len", len)
@@ -28,7 +30,7 @@ parentEnv = do
         env' <- Env.setEnv env name obj
         inner env' cs
 
-len :: [Object.Object] -> IO Object.Object
+len :: [Object.Object] -> Result Object.Object
 len = pure . inner
   where
     inner [arg] = case arg of
@@ -39,22 +41,22 @@ len = pure . inner
 
     genInt = Object.IntObj . fromIntegral . length
 
-first :: [Object.Object] -> IO Object.Object
+first :: [Object.Object] -> Result Object.Object
 first = pure . arrayHelper "first" inner
   where
     inner = maybe arrayEmptyErr fst . uncons
 
-blast :: [Object.Object] -> IO Object.Object
+blast :: [Object.Object] -> Result Object.Object
 blast = pure . arrayHelper "last" inner
   where
     inner = maybe arrayEmptyErr snd . unsnoc
 
-rest :: [Object.Object] -> IO Object.Object
+rest :: [Object.Object] -> Result Object.Object
 rest = pure . arrayHelper "rest" inner
   where
     inner = maybe arrayEmptyErr (Object.ArrObj . snd) . uncons
 
-push :: [Object.Object] -> IO Object.Object
+push :: [Object.Object] -> Result Object.Object
 push = pure . inner
   where
     inner [Object.ArrObj x, obj] = Object.ArrObj (x ++ [obj])
@@ -71,7 +73,7 @@ arrayHelper name fn = inner
     inner [other] = Object.ErrObj $ printf "argument to \"%s\" must be ARRAY, got %s" name $ Object.typeObject other
     inner d = Object.ErrObj $ printf "wrong number of arguments. got=%d, want=1" $ length d
 
-puts :: [Object.Object] -> IO Object.Object
+puts :: [Object.Object] -> Result Object.Object
 puts objs = do
-    mapM_ (putStrLn . dprint) objs
+    mapM_ (liftIO . putStrLn . dprint) objs
     pure Object.Null
