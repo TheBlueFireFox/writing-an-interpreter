@@ -4,13 +4,12 @@ import Ast qualified
 import Control.Monad (foldM)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT)
-import Data.Bifunctor (first)
 import Data.HashMap.Strict (HashMap, fromList, (!?))
 import Data.Int (Int64)
 import Data.List (genericIndex)
 import Data.Maybe (fromMaybe)
 import Environment qualified as Env
-import Object (Abandon, Result, failWith)
+import Object (Result, failWith, returnWith)
 import Object qualified
 import Text.Printf (printf)
 
@@ -19,23 +18,21 @@ evalProgram env prog = do
     res <- evalProgramHelper env prog
     case res of
         Left (Object.Error err) -> pure $ Left err
+        Left (Object.Return ret) -> pure $ Right ret
         Right ret -> pure $ Right ret
 
-evalProgramHelper :: Object.Env -> Ast.Program -> IO (Either Abandon (Object.Object, Object.Env))
+evalProgramHelper :: Object.Env -> Ast.Program -> IO (Either Object.Unwind (Object.Object, Object.Env))
 evalProgramHelper env (Ast.Program statements) = runExceptT $ inner env Object.Null statements
   where
-    inner :: Object.Env -> Object.Object -> [Ast.Statement] -> Result (Object.Object, Object.Env)
     inner env' lst [] = pure (lst, env')
     inner env' _ (curr : cs) = do
-        s <- evalStatement env' curr
-        case s of
-            (Object.RetObj v, env'') -> pure (v, env'')
-            (next, env'') -> inner env'' next cs
+        (next, env'') <- evalStatement env' curr
+        inner env'' next cs
 
 evalStatement :: Object.Env -> Ast.Statement -> Result (Object.Object, Object.Env)
 evalStatement env statement = case statement of
     Ast.LetStatement ident expr -> (Object.Null,) <$> evalLetStatement env ident expr
-    Ast.ReturnStatement expr -> first Object.RetObj <$> inner evalExpression expr
+    Ast.ReturnStatement expr -> returnWith =<< inner evalExpression expr
     Ast.ExpressionStatement expr -> inner evalExpression expr
     Ast.BlockStatement statements -> inner evalBlockStatement statements
   where
@@ -53,10 +50,8 @@ evalBlockStatement env = inner env Object.Null
   where
     inner _ acc [] = pure acc
     inner env' _ (c : cs) = do
-        s <- evalStatement env' c
-        case s of
-            (curr@(Object.RetObj _), _) -> pure curr
-            (curr, env'') -> inner env'' curr cs
+        (curr, env'') <- evalStatement env' c
+        inner env'' curr cs
 
 evalExpression :: Object.Env -> Ast.Expression -> Result Object.Object
 evalExpression env expr =
@@ -243,10 +238,7 @@ applyFn params body fnEnv args
     | lenParams /= lenArgs = failWith $ printf "wrong number of arguments. got=%d, want=%d" lenArgs lenParams
     | otherwise = do
         efn <- extendFnEnv params fnEnv args
-        b <- evalStatement efn body
-        pure $ case b of
-            (Object.RetObj v, _) -> v
-            (other, _) -> other
+        Object.catchReturn $ evalStatement efn body
   where
     lenParams = length params
     lenArgs = length args
