@@ -1,13 +1,7 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DerivingStrategies #-}
-
 module Ast (Program (..), Statement (..), Expression (..), Display (..)) where
 
-import Data.Hashable (Hashable)
 import Data.Int (Int64)
 import Data.List (intercalate)
-import GHC.Generics (Generic)
 
 class Display a where
     dprint :: a -> String
@@ -23,8 +17,7 @@ data Statement
     | ReturnStatement Expression
     | ExpressionStatement Expression
     | BlockStatement [Statement]
-    deriving stock (Eq, Show, Generic)
-    deriving anyclass (Hashable)
+    deriving (Eq, Show)
 
 instance Display Statement where
     dprint (LetStatement name expr) = "let " ++ name ++ " = " ++ dprint expr ++ ";"
@@ -53,8 +46,7 @@ data Expression
     | IfExpr Expression Statement (Maybe Statement) -- Condition BlockStatement BlockStatement
     | FnExpr [Expression] Statement -- Params BlockStatement
     | CallExpr Expression [Expression] -- Function Arguments
-    deriving stock (Eq, Show, Generic)
-    deriving anyclass (Hashable)
+    deriving (Eq, Show)
 
 showHelperSingle :: (Display a) => String -> a -> String
 showHelperSingle sym expr = "(" ++ sym ++ dprint expr ++ ")"
