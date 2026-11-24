@@ -228,6 +228,10 @@ testReturn = do
                     , ("return 10; 9;", Object.IntObj 10)
                     , ("return 2 * 5; 9;", Object.IntObj 10)
                     , ("9; return 2 * 5; 9;", Object.IntObj 10)
+                    , ("let f = fn() { if (true) { return 1; } 2 }; f() + 10", Object.IntObj 11)
+                    , ("return 1; 2", Object.IntObj 1)
+                    , ("let f = fn(x) { if (x) { return 1; } 2 }; f(true) + f(false)", Object.IntObj 3)
+                    , ("let f = fn() { let a = if (true) { return 1; }; 2 }; f()", Object.IntObj 1)
                     ]
                 process = first testEval
                 (got, expected) = unzip . map process $ lst

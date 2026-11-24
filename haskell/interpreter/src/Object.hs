@@ -1,7 +1,6 @@
 module Object (module Object) where
 
 import Ast (Display (dprint), Expression, Statement)
-import Control.Monad.Trans.Except (ExceptT)
 import Control.Monad.Trans.Except qualified as Except
 import Data.Bool (bool)
 import Data.HashMap.Strict (HashMap, toList)
@@ -13,12 +12,23 @@ import GHC.Generics (Generic)
 
 type Env = Environment.Env Object
 
-failWith :: (Monad m) => String -> ExceptT Abandon m a
-failWith s = Except.throwE $ Error s
+data Unwind
+    = Error String
+    | Return (Object.Object, Env)
 
-data Abandon = Error String
+type Result a = Except.ExceptT Unwind IO a
 
-type Result a = ExceptT Abandon IO a
+returnWith :: (Object, Env) -> Result a
+returnWith = Except.throwE . Return
+
+failWith :: String -> Result a
+failWith = Except.throwE . Error
+
+catchReturn :: Result (Object, Env) -> Result Object
+catchReturn s = Except.catchE (fst <$> s) converter
+  where
+    converter err@(Error _) = Except.throwE err
+    converter (Return ret) = pure $ fst ret
 
 type BuildInFunction = [Object.Object] -> Result Object.Object
 
@@ -37,7 +47,6 @@ data Object
     | StrObj String
     | ArrObj [Object]
     | HashObj (HashMap HashableObject Object)
-    | RetObj Object
     | FnObj [Expression] Statement Env -- Params Body Env
     | BuiObj BuildInFunction -- Fn
     deriving (Show, Eq)
@@ -71,7 +80,6 @@ typeObject obj = case obj of
     StrObj _ -> "STRING"
     ArrObj _ -> "ARRAY"
     HashObj _ -> "HASH"
-    RetObj _ -> "RETURN"
     BuiObj _ -> "BUILTIN"
     FnObj{} -> "FN"
 
@@ -80,7 +88,6 @@ instance Display Object where
     dprint (IntObj v) = show v
     dprint (BoolObj v) = bool "false" "true" v
     dprint (StrObj v) = v
-    dprint (RetObj v) = "return " ++ dprint v
     dprint (BuiObj _) = "builtin function"
     dprint (ArrObj arr) = "[" ++ intercalate ", " (map dprint arr) ++ "]"
     dprint (HashObj obj) = "{" ++ intercalate ", " (map (\(k, v) -> dprint (fromHashKey k) ++ ": " ++ dprint v) (toList obj)) ++ "}"
