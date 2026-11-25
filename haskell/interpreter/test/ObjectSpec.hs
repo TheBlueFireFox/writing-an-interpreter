@@ -1,7 +1,7 @@
 module ObjectSpec (spec) where
 
 import Data.Hashable (Hashable (hash))
-import Object (HashableObject(..))
+import Object (HashableObject (..))
 import Test.Hspec (Spec, SpecWith, describe, it, shouldBe, shouldNotBe)
 
 spec :: Spec

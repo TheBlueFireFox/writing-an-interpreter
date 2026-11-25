@@ -1,6 +1,6 @@
 module Parser (parse) where
 
-import Ast (Expression (..), Program (Program), Statement (..))
+import Ast (Expression (..), Identifier (Identifier), Program (Program), Statement (..))
 import Control.Arrow (first, second)
 import Data.Bifunctor (Bifunctor (bimap))
 import Data.Int (Int64)
@@ -58,7 +58,7 @@ removeSemi cs
 
 parseLetStatements :: [TokenType] -> Either [String] (Statement, [TokenType])
 parseLetStatements [] = Left ["Missing Tokens"]
-parseLetStatements (x : xs) = first . LetStatement <$> ident x <*> expr xs
+parseLetStatements (x : xs) = first . LetStatement . Identifier <$> ident x <*> expr xs
   where
     ident (Token.Ident iden) = Right iden
     ident _ = Left ["Invalid Token Position"]
@@ -155,7 +155,7 @@ parseGrouped xs = uncurry helper =<< parseExpression Lowest xs
     helper _ _ = Left ["not a completed group"]
 
 parseIdent :: String -> [TokenType] -> Either Errors (Expression, [TokenType])
-parseIdent val xs = Right (IdentExpr val, xs)
+parseIdent val xs = Right (IdentExpr (Identifier val), xs)
 
 parseInt64 :: Int64 -> [TokenType] -> Either Errors (Expression, [TokenType])
 parseInt64 val xs = Right (IntegerExpr val, xs)
@@ -211,7 +211,7 @@ parseFnLit = inner
 
     helperIdentToks toks = case toks of
         [] -> Left ["Emptry token list"]
-        (Ident ident : xs) -> Right (Ast.IdentExpr ident, xs)
+        (Ident ident : xs) -> Right (Identifier ident, xs)
         (x : _) -> Left ["Not a ident " ++ show x]
 
     helperParseParamsPreCond (acc, toks)

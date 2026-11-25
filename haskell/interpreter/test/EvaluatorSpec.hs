@@ -1,6 +1,6 @@
 module EvaluatorSpec (spec) where
 
-import Ast (Expression (..), Program, Statement (..))
+import Ast (Expression (..), Identifier (..), Program, Statement (..))
 import Builtin (globalEnvironment)
 import Data.Bifunctor (Bifunctor (bimap), first)
 import Data.HashMap.Strict (fromList)
@@ -302,9 +302,9 @@ testFun = do
             let input = "fn(x) { x + 2; };"
                 blk =
                     [ ExpressionStatement
-                        (AddExpr (IdentExpr "x") (IntegerExpr 2))
+                        (AddExpr (IdentExpr (Identifier "x")) (IntegerExpr 2))
                     ]
-                eparams = [IdentExpr "x"]
+                eparams = [Identifier "x"]
                 ebody = BlockStatement blk
             t <- testEval input
             -- direct comparison doesn't work as the Environment.Env is a IORef and the Eq

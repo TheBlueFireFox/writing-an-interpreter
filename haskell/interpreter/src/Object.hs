@@ -1,6 +1,6 @@
 module Object (module Object) where
 
-import Ast (Display (dprint), Expression, Statement)
+import Ast (Display (dprint), Identifier, Statement)
 import Control.Monad.Trans.Except qualified as Except
 import Data.Bool (bool)
 import Data.HashMap.Strict (HashMap, toList)
@@ -47,7 +47,7 @@ data Object
     | StrObj String
     | ArrObj [Object]
     | HashObj (HashMap HashableObject Object)
-    | FnObj [Expression] Statement Env -- Params Body Env
+    | FnObj [Identifier] Statement Env -- Params Body Env
     | BuiObj BuildInFunction -- Fn
     deriving (Show, Eq)
 
@@ -91,4 +91,4 @@ instance Display Object where
     dprint (BuiObj _) = "builtin function"
     dprint (ArrObj arr) = "[" ++ intercalate ", " (map dprint arr) ++ "]"
     dprint (HashObj obj) = "{" ++ intercalate ", " (map (\(k, v) -> dprint (fromHashKey k) ++ ": " ++ dprint v) (toList obj)) ++ "}"
-    dprint (FnObj params expr _) = "fn(" ++ intercalate ", " (map dprint params) ++ ")" ++ "{\n" ++ dprint expr ++ "\n}"
+    dprint (FnObj params expr _) = "fn (" ++ intercalate ", " (map dprint params) ++ ")" ++ "{\n" ++ dprint expr ++ "\n}"

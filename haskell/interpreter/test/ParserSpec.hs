@@ -50,9 +50,9 @@ testLetStatements =
                 \"
             expected =
                 Right . Ast.Program $
-                    [ Ast.LetStatement "x" $ Ast.IntegerExpr 5
-                    , Ast.LetStatement "y" $ Ast.BooleanExpr True
-                    , Ast.LetStatement "foobar" $ Ast.IdentExpr "y"
+                    [ Ast.LetStatement (Ast.Identifier "x") $ Ast.IntegerExpr 5
+                    , Ast.LetStatement (Ast.Identifier "y") $ Ast.BooleanExpr True
+                    , Ast.LetStatement (Ast.Identifier "foobar") $ Ast.IdentExpr $ Ast.Identifier "y"
                     ]
         parse input `shouldBe` expected
 
@@ -70,7 +70,7 @@ testReturnStatements =
                 (Right . Ast.Program)
                     [ Ast.ReturnStatement $ Ast.IntegerExpr 5
                     , Ast.ReturnStatement $ Ast.BooleanExpr True
-                    , Ast.ReturnStatement $ Ast.IdentExpr "y"
+                    , Ast.ReturnStatement $ Ast.IdentExpr $ Ast.Identifier "y"
                     ]
         parse input `shouldBe` expected
 
@@ -82,7 +82,7 @@ testIdentifierExpression =
                 input = "foobar;"
                 expected =
                     Right . Ast.Program $
-                        [ Ast.ExpressionStatement $ Ast.IdentExpr "foobar"
+                        [ Ast.ExpressionStatement . Ast.IdentExpr . Ast.Identifier $ "foobar"
                         ]
             parse input `shouldBe` expected
         it "simple foobnar example" $ do
@@ -90,7 +90,7 @@ testIdentifierExpression =
                 input = "foobar;"
                 expected =
                     Right . Ast.Program $
-                        [ Ast.ExpressionStatement $ Ast.IdentExpr "foobar"
+                        [ Ast.ExpressionStatement . Ast.IdentExpr . Ast.Identifier $ "foobar"
                         ]
             parse input `shouldBe` expected
 
@@ -181,8 +181,8 @@ testPrefixExpression =
                 expected =
                     [ Right . Ast.Program $ [Ast.ExpressionStatement x]
                     | x <-
-                        [ Ast.NegExpr . Ast.IdentExpr $ "foobar"
-                        , Ast.NotExpr . Ast.IdentExpr $ "foobar"
+                        [ Ast.NegExpr . Ast.IdentExpr . Ast.Identifier $ "foobar"
+                        , Ast.NotExpr . Ast.IdentExpr . Ast.Identifier $ "foobar"
                         ]
                     ]
                 gotten =
@@ -284,8 +284,8 @@ testOperandPrecedence =
 testIfExpression :: SpecWith ()
 testIfExpression =
     let
-        blk x = Ast.BlockStatement [Ast.ExpressionStatement $ Ast.IdentExpr x]
-        ident = Ast.IdentExpr
+        ident = Ast.IdentExpr . Ast.Identifier
+        blk x = Ast.BlockStatement [Ast.ExpressionStatement $ ident x]
         es = Ast.ExpressionStatement
      in
         describe "TestIfExpession" $ do
@@ -330,7 +330,7 @@ testArrayLitteralExpression =
             let
                 input = "myArray[1 + 1]"
                 es = Ast.ExpressionStatement
-                iden = Ast.IdentExpr
+                iden = Ast.IdentExpr . Ast.Identifier
                 int = Ast.IntegerExpr
                 add = Ast.AddExpr
                 expected =
@@ -340,9 +340,9 @@ testArrayLitteralExpression =
         it "indexExpr2" $ do
             let
                 input = "let myArray = [1, 2, 3]; myArray[0] + myArray[1] + myArray[2];"
-                ls = Ast.LetStatement
+                ls = Ast.LetStatement . Ast.Identifier
                 es = Ast.ExpressionStatement
-                iden = Ast.IdentExpr
+                iden = Ast.IdentExpr . Ast.Identifier
                 int = Ast.IntegerExpr
                 add = Ast.AddExpr
                 indx = Ast.IndExpr
@@ -358,7 +358,8 @@ testFunctionLitteralExpression :: SpecWith ()
 testFunctionLitteralExpression =
     let
         blk inner = Ast.BlockStatement [Ast.ExpressionStatement inner]
-        ident = Ast.IdentExpr
+        ident = Ast.Identifier
+        identExpr = Ast.IdentExpr . Ast.Identifier
         es = Ast.ExpressionStatement
      in
         describe "TestFuntionLitterals" $ do
@@ -420,7 +421,7 @@ testFunctionLitteralExpression =
                                     [ ident "x"
                                     , ident "y"
                                     ]
-                                    (blk (Ast.AddExpr (ident "x") (ident "y")))
+                                    (blk (Ast.AddExpr (identExpr "x") (identExpr "y")))
                             ]
 
                 parse input `shouldBe` expected
@@ -428,7 +429,7 @@ testFunctionLitteralExpression =
 testCallExpression :: SpecWith ()
 testCallExpression =
     let
-        ident = Ast.IdentExpr
+        ident = Ast.IdentExpr . Ast.Identifier
         int = Ast.IntegerExpr
         es = Ast.ExpressionStatement
      in

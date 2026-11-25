@@ -1,6 +1,6 @@
 module AstSpec (spec) where
 
-import Ast (Display (dprint), Expression (IdentExpr), Program (Program), Statement (LetStatement))
+import Ast (Display (dprint), Expression (IdentExpr), Identifier (..), Program (Program), Statement (LetStatement))
 import Test.Hspec (Spec, describe, it, shouldBe)
 
 spec :: Spec
@@ -11,6 +11,6 @@ spec = do
                 expected = "let myVar = anotherVar;"
                 input =
                     Program
-                        [ LetStatement "myVar" $ IdentExpr "anotherVar"
+                        [ LetStatement (Ast.Identifier "myVar") $ IdentExpr $ Identifier "anotherVar"
                         ]
             dprint input `shouldBe` expected
