@@ -1,4 +1,4 @@
-module Ast (Program (..), Statement (..), Expression (..), Display (..)) where
+module Ast (Program (..), Statement (..), Expression (..), Display (..), Identifier (..)) where
 
 import Data.Int (Int64)
 import Data.List (intercalate)
@@ -12,21 +12,27 @@ newtype Program = Program [Statement]
 instance Display Program where
     dprint (Program statements) = concatMap dprint statements
 
+newtype Identifier = Identifier String
+    deriving (Eq, Show)
+
+instance Display Identifier where
+    dprint (Identifier i) = i
+
 data Statement
-    = LetStatement String Expression
+    = LetStatement Identifier Expression
     | ReturnStatement Expression
     | ExpressionStatement Expression
     | BlockStatement [Statement]
     deriving (Eq, Show)
 
 instance Display Statement where
-    dprint (LetStatement name expr) = "let " ++ name ++ " = " ++ dprint expr ++ ";"
+    dprint (LetStatement (Identifier name) expr) = "let " ++ name ++ " = " ++ dprint expr ++ ";"
     dprint (ReturnStatement expr) = "return " ++ dprint expr ++ ";"
     dprint (ExpressionStatement expr) = dprint expr
     dprint (BlockStatement exprs) = concatMap dprint exprs
 
 data Expression
-    = IdentExpr String
+    = IdentExpr Identifier
     | IntegerExpr Int64
     | BooleanExpr Bool
     | StrExpr String
@@ -44,7 +50,7 @@ data Expression
     | ArrExpr [Expression] -- Elements
     | HashExpr [(Expression, Expression)] -- Elements
     | IfExpr Expression Statement (Maybe Statement) -- Condition BlockStatement BlockStatement
-    | FnExpr [Expression] Statement -- Params BlockStatement
+    | FnExpr [Identifier] Statement -- Params BlockStatement
     | CallExpr Expression [Expression] -- Function Arguments
     deriving (Eq, Show)
 
@@ -63,7 +69,7 @@ showHelperIf ::
 showHelperIf cond cons alt = "if " ++ dprint cond ++ " " ++ dprint cons ++ maybe "" (\x -> "else " ++ dprint x) alt
 
 instance Display Expression where
-    dprint (IdentExpr lit) = lit
+    dprint (IdentExpr ident) = dprint ident
     dprint (IntegerExpr lit) = show lit
     dprint (BooleanExpr True) = "true"
     dprint (BooleanExpr False) = "false"

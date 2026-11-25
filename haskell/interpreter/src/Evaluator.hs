@@ -36,12 +36,10 @@ evalStatement env statement = case statement of
     Ast.ExpressionStatement expr -> inner evalExpression expr
     Ast.BlockStatement statements -> inner evalBlockStatement statements
   where
-    inner fn param = do
-        r <- fn env param
-        pure (r, env)
+    inner fn param = (,env) <$> fn env param
 
-evalLetStatement :: Env.Env Object.Object -> String -> Ast.Expression -> Result (Object.Env)
-evalLetStatement env ident expr = do
+evalLetStatement :: Object.Env -> Ast.Identifier -> Ast.Expression -> Result Object.Env
+evalLetStatement env (Ast.Identifier ident) expr = do
     res <- evalExpression env expr
     liftIO $ Env.setEnv env ident res
 
@@ -56,7 +54,7 @@ evalBlockStatement env = inner env Object.Null
 evalExpression :: Object.Env -> Ast.Expression -> Result Object.Object
 evalExpression env expr =
     case expr of
-        Ast.IdentExpr v -> evalIdent env v
+        Ast.IdentExpr (Ast.Identifier v) -> evalIdent env v
         Ast.IntegerExpr v -> pure $ Object.IntObj v
         Ast.BooleanExpr v -> pure $ Object.BoolObj v
         Ast.StrExpr v -> pure $ Object.StrObj v
@@ -233,7 +231,7 @@ evalCallExpr fn args env = do
 evalExpressions :: Env.Env Object.Object -> [Ast.Expression] -> Result [Object.Object]
 evalExpressions env = mapM (evalExpression env)
 
-applyFn :: [Ast.Expression] -> Ast.Statement -> Object.Env -> [Object.Object] -> Result Object.Object
+applyFn :: [Ast.Identifier] -> Ast.Statement -> Object.Env -> [Object.Object] -> Result Object.Object
 applyFn params body fnEnv args
     | lenParams /= lenArgs = failWith $ printf "wrong number of arguments. got=%d, want=%d" lenArgs lenParams
     | otherwise = do
@@ -243,17 +241,13 @@ applyFn params body fnEnv args
     lenParams = length params
     lenArgs = length args
 
-extendFnEnv :: [Ast.Expression] -> Env.Env a -> [a] -> Result (Env.Env a)
+extendFnEnv :: [Ast.Identifier] -> Object.Env -> [Object.Object] -> Result Object.Env
 extendFnEnv params fnEnv args = do
     fenv <- liftIO $ Env.newEnclosedEnv fnEnv
     -- zip is okay here as we ensure on applyFn that params and args are of equal length
     foldM apply fenv (zip params args)
   where
-    unwrapExpr val = case val of
-        (Ast.IdentExpr ident) -> ident
-        v -> error $ "unexpected parameter expression: " ++ show v
-
-    apply env (param, arg) = liftIO $ Env.setEnv env (unwrapExpr param) arg
+    apply env (Ast.Identifier param, arg) = liftIO $ Env.setEnv env param arg
 
 evalHashExpr :: Object.Env -> [(Ast.Expression, Ast.Expression)] -> Result Object.Object
 evalHashExpr env = fmap (Object.HashObj . fromList) . traverse handleExpr
