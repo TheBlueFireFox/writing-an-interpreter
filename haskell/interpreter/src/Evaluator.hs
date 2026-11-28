@@ -34,7 +34,6 @@ evalStatement env statement = case statement of
     Ast.LetStatement ident expr -> (Object.Null,) <$> evalLetStatement env ident expr
     Ast.ReturnStatement expr -> returnWith =<< inner evalExpression expr
     Ast.ExpressionStatement expr -> inner evalExpression expr
-    Ast.BlockStatement statements -> inner evalBlockStatement statements
   where
     inner fn param = (,env) <$> fn env param
 
@@ -43,8 +42,8 @@ evalLetStatement env (Ast.Identifier ident) expr = do
     res <- evalExpression env expr
     liftIO $ Env.setEnv env ident res
 
-evalBlockStatement :: Object.Env -> [Ast.Statement] -> Result Object.Object
-evalBlockStatement env = inner env Object.Null
+evalBlock :: Object.Env -> Ast.Block -> Result Object.Object
+evalBlock env (Ast.Block statements) = inner env Object.Null statements
   where
     inner _ acc [] = pure acc
     inner env' _ (c : cs) = do
@@ -188,19 +187,14 @@ evalIdent env name = do
         Just has -> pure has
         Nothing -> failWith $ "identifier not found: " ++ name
 
-evalIfExpr ::
-    Object.Env ->
-    Ast.Expression ->
-    Ast.Statement ->
-    Maybe Ast.Statement ->
-    Result Object.Object
+evalIfExpr :: Object.Env -> Ast.Expression -> Ast.Block -> Maybe Ast.Block -> Result Object.Object
 evalIfExpr env cond cons alt = handleIf =<< evalExpression env cond
   where
     handleIf c
-        | evalTruthy c = fst <$> evalStatement env cons
+        | evalTruthy c = evalBlock env cons
         | otherwise = handleAlt alt
-    handleAlt Nothing = pure Object.Null
-    handleAlt (Just v) = fst <$> evalStatement env v
+
+    handleAlt = maybe (pure Object.Null) (evalBlock env)
 
 evalTruthy :: Object.Object -> Bool
 evalTruthy o = case o of
@@ -231,12 +225,12 @@ evalCallExpr fn args env = do
 evalExpressions :: Env.Env Object.Object -> [Ast.Expression] -> Result [Object.Object]
 evalExpressions env = mapM (evalExpression env)
 
-applyFn :: [Ast.Identifier] -> Ast.Statement -> Object.Env -> [Object.Object] -> Result Object.Object
+applyFn :: [Ast.Identifier] -> Ast.Block -> Object.Env -> [Object.Object] -> Result Object.Object
 applyFn params body fnEnv args
     | lenParams /= lenArgs = failWith $ printf "wrong number of arguments. got=%d, want=%d" lenArgs lenParams
     | otherwise = do
         efn <- extendFnEnv params fnEnv args
-        Object.catchReturn $ evalStatement efn body
+        Object.catchReturn $ evalBlock efn body
   where
     lenParams = length params
     lenArgs = length args

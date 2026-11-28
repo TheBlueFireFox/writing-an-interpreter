@@ -1,6 +1,6 @@
 module EvaluatorSpec (spec) where
 
-import Ast (Expression (..), Identifier (..), Program, Statement (..))
+import Ast (Block (..), Expression (..), Identifier (..), Program, Statement (..))
 import Builtin (globalEnvironment)
 import Data.Bifunctor (Bifunctor (bimap), first)
 import Data.HashMap.Strict (fromList)
@@ -237,7 +237,7 @@ testReturn = do
                 (got, expected) = unzip . map process $ lst
             g <- sequence got
             g `shouldBe` map Right expected
-        it "blockStatements" $ do
+        it "Blocks" $ do
             let input = "if (10 > 1) { if (10 > 1) { return 10; } return 1; }"
                 expected = Right $ Object.IntObj 10
             t <- testEval input
@@ -305,7 +305,7 @@ testFun = do
                         (AddExpr (IdentExpr (Identifier "x")) (IntegerExpr 2))
                     ]
                 eparams = [Identifier "x"]
-                ebody = BlockStatement blk
+                ebody = Block blk
             t <- testEval input
             -- direct comparison doesn't work as the Environment.Env is a IORef and the Eq
             -- for that uses pointer equality (not very useful here)
