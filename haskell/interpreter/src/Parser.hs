@@ -1,6 +1,6 @@
 module Parser (parse) where
 
-import Ast (Expression (..), Identifier (Identifier), Program (Program), Statement (..))
+import Ast (Block (..), Expression (..), Identifier (Identifier), Program (Program), Statement (..))
 import Control.Arrow (first, second)
 import Data.Bifunctor (Bifunctor (bimap))
 import Data.Int (Int64)
@@ -67,10 +67,10 @@ parseLetStatements (x : xs) = first . LetStatement . Identifier <$> ident x <*> 
     expr (Token.Assign : cs) = second removeSemi <$> parseExpression Lowest cs
     expr (c : _) = Left ["Invalid stuff -- " ++ show c]
 
-parseBlockStatement :: [TokenType] -> Either Errors (Statement, [TokenType])
-parseBlockStatement = inner []
+parseBlock :: [TokenType] -> Either Errors (Block, [TokenType])
+parseBlock = inner []
   where
-    inner acc (RBrace : cs) = Right (BlockStatement $ reverse acc, cs)
+    inner acc (RBrace : cs) = Right (Block $ reverse acc, cs)
     inner _ (Eof : _) = Left ["Unexpected EOF"]
     inner _ [] = Left ["Emptry toks"]
     inner acc toks = uncurry inner . first (: acc) =<< parseStatement toks
@@ -188,10 +188,10 @@ parseIf token
         (alt, toks) <- helperAlt toksInner
         pure (IfExpr cond cons alt, toks)
 
-    helperCons (RParen : LBrace : tok) = parseBlockStatement tok
+    helperCons (RParen : LBrace : tok) = parseBlock tok
     helperCons _ = Left ["Missing {"]
 
-    helperAlt (Else : LBrace : tok) = first Just <$> parseBlockStatement tok
+    helperAlt (Else : LBrace : tok) = first Just <$> parseBlock tok
     helperAlt (Else : _) = Left ["missing block statement else { x }"]
     helperAlt [] = Left ["no more tokens"]
     helperAlt toks = Right (Nothing, toks)
@@ -206,7 +206,7 @@ parseFnLit = inner
 
     helperInner token = do
         (params, token') <- helperParseParams token
-        (body, token'') <- parseBlockStatement token'
+        (body, token'') <- parseBlock token'
         pure (FnExpr params body, token'')
 
     helperIdentToks toks = case toks of

@@ -1,4 +1,4 @@
-module Ast (Program (..), Statement (..), Expression (..), Display (..), Identifier (..)) where
+module Ast (Program (..), Statement (..), Expression (..), Display (..), Identifier (..), Block (..)) where
 
 import Data.Int (Int64)
 import Data.List (intercalate)
@@ -18,18 +18,22 @@ newtype Identifier = Identifier String
 instance Display Identifier where
     dprint (Identifier i) = i
 
+newtype Block = Block [Statement]
+    deriving (Eq, Show)
+
+instance Display Block where
+    dprint (Block exprs) = concatMap dprint exprs
+
 data Statement
     = LetStatement Identifier Expression
     | ReturnStatement Expression
     | ExpressionStatement Expression
-    | BlockStatement [Statement]
     deriving (Eq, Show)
 
 instance Display Statement where
     dprint (LetStatement (Identifier name) expr) = "let " ++ name ++ " = " ++ dprint expr ++ ";"
     dprint (ReturnStatement expr) = "return " ++ dprint expr ++ ";"
     dprint (ExpressionStatement expr) = dprint expr
-    dprint (BlockStatement exprs) = concatMap dprint exprs
 
 data Expression
     = IdentExpr Identifier
@@ -49,8 +53,8 @@ data Expression
     | IndExpr Expression Expression -- Object Index
     | ArrExpr [Expression] -- Elements
     | HashExpr [(Expression, Expression)] -- Elements
-    | IfExpr Expression Statement (Maybe Statement) -- Condition BlockStatement BlockStatement
-    | FnExpr [Identifier] Statement -- Params BlockStatement
+    | IfExpr Expression Block (Maybe Block) -- Condition Block Block
+    | FnExpr [Identifier] Block -- Params Block
     | CallExpr Expression [Expression] -- Function Arguments
     deriving (Eq, Show)
 
@@ -88,5 +92,5 @@ instance Display Expression where
     dprint (ArrExpr arr) = "[" ++ intercalate ", " (map dprint arr) ++ "]"
     dprint (HashExpr m) = "{" ++ intercalate ", " (map (\(l, r) -> dprint l ++ ": " ++ dprint r) m) ++ "}"
     dprint (IfExpr cond cons alt) = showHelperIf cond cons alt
-    dprint (FnExpr param blk) = "fun (" ++ intercalate ", " (map dprint param) ++ ")" ++ dprint blk
+    dprint (FnExpr param blk) = "fn(" ++ intercalate ", " (map dprint param) ++ ")" ++ dprint blk
     dprint (CallExpr fn param) = dprint fn ++ "(" ++ intercalate ", " (map dprint param) ++ ")"

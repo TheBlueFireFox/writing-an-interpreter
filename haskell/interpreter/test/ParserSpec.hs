@@ -285,7 +285,7 @@ testIfExpression :: SpecWith ()
 testIfExpression =
     let
         ident = Ast.IdentExpr . Ast.Identifier
-        blk x = Ast.BlockStatement [Ast.ExpressionStatement $ ident x]
+        blk x = Ast.Block [Ast.ExpressionStatement $ ident x]
         es = Ast.ExpressionStatement
      in
         describe "TestIfExpession" $ do
@@ -357,7 +357,7 @@ testArrayLitteralExpression =
 testFunctionLitteralExpression :: SpecWith ()
 testFunctionLitteralExpression =
     let
-        blk inner = Ast.BlockStatement [Ast.ExpressionStatement inner]
+        blk inner = Ast.Block [Ast.ExpressionStatement inner]
         ident = Ast.Identifier
         identExpr = Ast.IdentExpr . Ast.Identifier
         es = Ast.ExpressionStatement
@@ -383,7 +383,7 @@ testFunctionLitteralExpression =
                             [ es $
                                 Ast.FnExpr
                                     []
-                                    (Ast.BlockStatement [])
+                                    (Ast.Block [])
                             ]
                 parse input `shouldBe` expected
             it "simple function no params but whitespace" $ do
@@ -408,7 +408,7 @@ testFunctionLitteralExpression =
                                     [ ident "x"
                                     , ident "y"
                                     ]
-                                    (Ast.BlockStatement [])
+                                    (Ast.Block [])
                             ]
                 parse input `shouldBe` expected
             it "simple function with params" $ do
@@ -423,7 +423,6 @@ testFunctionLitteralExpression =
                                     ]
                                     (blk (Ast.AddExpr (identExpr "x") (identExpr "y")))
                             ]
-
                 parse input `shouldBe` expected
 
 testCallExpression :: SpecWith ()
@@ -469,9 +468,9 @@ testHashLiteralExpression =
                 input = "{\"one\": 1, \"two\": 2, \"three\": 3}"
                 expected =
                     Right . Ast.Program $
-                        [ ex $
-                            Ast.HashExpr $
-                                map (bimap str int) [("one", 1), ("two", 2), ("three", 3)]
+                        [ ex
+                            $ Ast.HashExpr
+                            $ map (bimap str int) [("one", 1), ("two", 2), ("three", 3)]
                         ]
             parse input `shouldBe` expected
         it "parsing hash literals" $ do
@@ -479,13 +478,13 @@ testHashLiteralExpression =
                 input = "{\"one\": 0 + 1, \"two\": 10 - 8, \"three\": 15 / 5}"
                 expected =
                     Right . Ast.Program $
-                        [ ex $
-                            Ast.HashExpr $
-                                map
-                                    (first str)
-                                    [ ("one", Ast.AddExpr (int 0) (int 1))
-                                    , ("two", Ast.MinExpr (int 10) (int 8))
-                                    , ("three", Ast.DivExpr (int 15) (int 5))
-                                    ]
+                        [ ex
+                            $ Ast.HashExpr
+                            $ map
+                                (first str)
+                                [ ("one", Ast.AddExpr (int 0) (int 1))
+                                , ("two", Ast.MinExpr (int 10) (int 8))
+                                , ("three", Ast.DivExpr (int 15) (int 5))
+                                ]
                         ]
             parse input `shouldBe` expected
